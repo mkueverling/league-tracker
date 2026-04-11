@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Tracker</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #121212;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-top: 10vh;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+        }
+
+        .search-container {
+            display: flex;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            border: 1px solid #333;
+            border-radius: 8px 0 0 8px;
+            background-color: #1e1e1e;
+            color: #fff;
+            outline: none;
+        }
+
+        button {
+            padding: 15px 25px;
+            font-size: 1.1rem;
+            background-color: #5c85d6;
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        #error-message { color: #ff4d4d; margin-top: 10px; height: 20px; font-size: 0.9rem; }
+
+        #results-container {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 20px;
+            display: none; 
+        }
+
+        .summary-text {
+            font-size: 1.1rem;
+            color: #a0a0a0;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .profile-card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .profile-info h2 { margin: 0 0 5px 0; font-size: 1.5rem; }
+        .profile-info p { margin: 0; color: #888; font-size: 0.9rem; }
+        
+        .social-links a {
+            color: #5c85d6;
+            text-decoration: none;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .match-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .match-item {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            text-decoration: none;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .match-item:hover {
+            background-color: #2a2a2a;
+            border-color: #5c85d6;
+        }
+
+        .match-item .pro-name {
+            color: #ff9900; 
+            font-weight: bold;
+        }
+
+        .loader {
+            display: none;
+            margin-top: 20px;
+            color: #5c85d6;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>TRACKER</h1>
+    
+    <div class="search-container">
+        <input type="text" id="riot-input" placeholder="Enter Riot ID (e.g. Faker#KR1)" autocomplete="off">
+        <button id="search-btn">Search</button>
+    </div>
+    
+    <div id="error-message"></div>
+    <div id="loader" class="loader">Searching database...</div>
+
+    <div id="results-container"></div>
+
+    <script>
+        const searchBtn = document.getElementById('search-btn');
+        const riotInput = document.getElementById('riot-input');
+        const errorMessage = document.getElementById('error-message');
+        const loader = document.getElementById('loader');
+        const resultsContainer = document.getElementById('results-container');
+
+        function renderResults(data) {
+            if (data.matches_found === 0) {
+                resultsContainer.innerHTML = `<div class="summary-text">No matches found against pros in our database.</div>`;
+                resultsContainer.style.display = 'block';
+                return;
+            }
+
+            const html = `
+                <div class="summary-text">
+                    Found <strong>${data.matches_found}</strong> matches against pros in our database.
+                </div>
+                
+                <div class="profile-card">
+                    <div class="profile-info">
+                        <h2>${data.pro_details.name}</h2>
+                        <p>${data.pro_details.riot_id}</p>
+                    </div>
+                    <div class="social-links">
+                        <a href="${data.pro_details.twitch}" target="_blank">Twitch</a>
+                        <a href="${data.pro_details.twitter}" target="_blank">Twitter</a>
+                    </div>
+                </div>
+
+                <div class="match-list">
+                    ${data.matches.map(match => `
+                        <a href="${match.stats_url}" target="_blank" class="match-item">
+                            <span>Match ID: ${match.match_id.split('_')[1]}</span>
+                            <span>vs <span class="pro-name">${data.pro_details.name}</span></span>
+                        </a>
+                    `).join('')}
+                </div>
+            `;
+
+            resultsContainer.innerHTML = html;
+            resultsContainer.style.display = 'block';
+        }
+
+        async function executeSearch() {
+            const inputValue = riotInput.value.trim();
+            errorMessage.textContent = '';
+            resultsContainer.style.display = 'none';
+
+            if (!inputValue.includes('#')) {
+                errorMessage.textContent = "Invalid format. Must include a hashtag (e.g., Name#Tag).";
+                return;
+            }
+
+            const [gameName, tagLine] = inputValue.split('#');
+            if (!gameName || !tagLine) {
+                errorMessage.textContent = "Invalid format. Missing name or tag.";
+                return;
+            }
+
+            loader.style.display = 'block';
+
+            try {
+                // The actual API call to your FastAPI backend
+                const response = await fetch(`http://localhost:8000/api/search?gameName=${encodeURIComponent(gameName)}&tagLine=${encodeURIComponent(tagLine)}`);
+                
+                if (!response.ok) {
+                    throw new Error("Riot ID not found or server error.");
+                }
+                
+                const responseData = await response.json();
+                
+                loader.style.display = 'none';
+                renderResults(responseData);
+                
+            } catch (error) {
+                loader.style.display = 'none';
+                errorMessage.textContent = error.message;
+            }
+        }
+
+        searchBtn.addEventListener('click', executeSearch);
+        riotInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') executeSearch(); });
+    </script>
+</body>
+</html>
