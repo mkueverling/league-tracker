@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import sqlite3
-import httpx # Async HTTP client (pip install httpx)
+import psycopg2
+import httpx
 import os
 from dotenv import load_dotenv
 
@@ -10,36 +10,42 @@ API_KEY = os.getenv("RIOT_API_KEY")
 
 app = FastAPI()
 
-# Enforce CORS to allow the frontend on port 3000 to talk to port 8000
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000"], 
     allow_credentials=True,
     allow_methods=["GET"],
     allow_headers=["*"],
 )
 
-def query_db(puuid):
-    # This executes the parameterized SQL lookup we designed earlier
-    conn = sqlite3.connect('../data/league_tracker.db')
+def query_postgres(puuid):
+    conn = psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
+    )
     cursor = conn.cursor()
     
+    # Notice the syntax change from ? to %s for Postgres
     query = '''
         SELECT m.match_id
         FROM Match_Participants mp_user
         JOIN Matches m ON mp_user.match_id = m.match_id
         JOIN Match_Participants mp_pro ON m.match_id = mp_pro.match_id
-        WHERE mp_user.puuid = ? AND mp_user.puuid != mp_pro.puuid
+        WHERE mp_user.puuid = %s AND mp_user.puuid != mp_pro.puuid
     '''
     cursor.execute(query, (puuid,))
     matches = cursor.fetchall()
+    
+    cursor.close()
     conn.close()
     
     return [row[0] for row in matches]
 
 @app.get("/api/search")
 async def search_player(gameName: str, tagLine: str):
-    # 1. Talk to Riot to get the user's PUUID
     headers = {"X-Riot-Token": API_KEY}
     url = f"https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}"
     
@@ -51,18 +57,15 @@ async def search_player(gameName: str, tagLine: str):
         
     user_puuid = response.json().get('puuid')
     
-    # 2. Query local database
-    matched_games = query_db(user_puuid)
+    matched_games = query_postgres(user_puuid)
     
-    # 3. Format and return the payload
-    # Note: For this example, Pro details are mocked. In production, you join your Pros table.
     return {
         "matches_found": len(matched_games),
         "pro_details": {
-            "name": "Jankos",
-            "riot_id": "G2 Jankos#unc2",
-            "twitch": "https://twitch.tv/jankos",
-            "twitter": "https://x.com/G2Jankos"
+            "name": "Pro Player", # We will dynamically query this via JOINs later
+            "riot_id": "Hidden#EUW",
+            "twitch": "https://twitch.tv",
+            "twitter": "https://x.com"
         },
         "matches": [
             {"match_id": m, "stats_url": f"https://www.leagueofgraphs.com/match/euw/{m.split('_')[1]}"}

@@ -72,7 +72,6 @@
             border: 1px solid #333;
             border-radius: 8px;
             padding: 20px;
-            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -113,11 +112,6 @@
             border-color: #5c85d6;
         }
 
-        .match-item .pro-name {
-            color: #ff9900; 
-            font-weight: bold;
-        }
-
         .loader {
             display: none;
             margin-top: 20px;
@@ -155,25 +149,25 @@
 
             const html = `
                 <div class="summary-text">
-                    Found <strong>${data.matches_found}</strong> matches against pros in our database.
+                    Found <strong>${data.matches_found}</strong> matches against pros in our database!
                 </div>
                 
-                <div class="profile-card">
-                    <div class="profile-info">
-                        <h2>${data.pro_details.name}</h2>
-                        <p>${data.pro_details.riot_id}</p>
-                    </div>
-                    <div class="social-links">
-                        <a href="${data.pro_details.twitch}" target="_blank">Twitch</a>
-                        <a href="${data.pro_details.twitter}" target="_blank">Twitter</a>
-                    </div>
-                </div>
-
                 <div class="match-list">
                     ${data.matches.map(match => `
-                        <a href="${match.stats_url}" target="_blank" class="match-item">
+                        <div class="profile-card" style="margin-bottom: 5px;">
+                            <div class="profile-info">
+                                <h2>${match.pro_name}</h2>
+                                <p>${match.pro_riot_id}</p>
+                            </div>
+                            <div class="social-links">
+                                ${match.twitch ? `<a href="${match.twitch}" target="_blank">Twitch</a>` : ''}
+                                ${match.twitter ? `<a href="${match.twitter}" target="_blank">Twitter</a>` : ''}
+                                ${match.youtube ? `<a href="${match.youtube}" target="_blank">YouTube</a>` : ''}
+                            </div>
+                        </div>
+                        <a href="${match.stats_url}" target="_blank" class="match-item" style="margin-bottom: 25px;">
                             <span>Match ID: ${match.match_id.split('_')[1]}</span>
-                            <span>vs <span class="pro-name">${data.pro_details.name}</span></span>
+                            <span>View Match Stats 📈</span>
                         </a>
                     `).join('')}
                 </div>
@@ -202,7 +196,7 @@
             loader.style.display = 'block';
 
             try {
-                // The actual API call to your FastAPI backend
+                // Connects to your FastAPI server running on port 8000
                 const response = await fetch(`http://localhost:8000/api/search?gameName=${encodeURIComponent(gameName)}&tagLine=${encodeURIComponent(tagLine)}`);
                 
                 if (!response.ok) {
