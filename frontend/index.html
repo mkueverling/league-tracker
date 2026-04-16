@@ -73,7 +73,54 @@
             color: #5c85d6;
         }
 
-        /* --- Match Card --- */
+        /* --- Live Card Styling --- */
+        .live-badge {
+            color: #ff4d4d;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #ff4d4d;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 77, 77, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
+        }
+
+        .player-header {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .rank-text {
+            color: #e6b800;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .mastery-text {
+            color: #00cc66;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: right;
+        }
+
+        /* --- History Card Styling --- */
         .match-card {
             background-color: #1e1e1e;
             border: 1px solid #333;
@@ -82,29 +129,14 @@
             overflow: hidden;
         }
 
-        /* Clickable header row */
         .match-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 14px 20px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            text-decoration: none;
-            color: white;
-            border-bottom: 1px solid #2a2a2a;
-        }
-
-        .match-header:hover {
             background-color: #2a2a2a;
-        }
-
-        .match-header-left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.85rem;
-            color: #888;
+            color: white;
+            border-bottom: 1px solid #333;
         }
 
         .pro-count-badge {
@@ -114,66 +146,23 @@
             font-weight: bold;
             padding: 2px 8px;
             border-radius: 999px;
-        }
-
-        .match-header-right {
-            font-size: 0.85rem;
-            color: #5c85d6;
-            font-weight: bold;
-        }
-
-        /* Pro roster inside the card */
-        .pro-roster {
-            padding: 0 20px 16px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding-top: 16px;
+            margin-right: 10px;
         }
 
         .pro-row {
+            padding: 15px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid #2a2a2a;
         }
 
-        .pro-info h2 {
-            margin: 0 0 3px 0;
-            font-size: 1.1rem;
+        .pro-row:last-child {
+            border-bottom: none;
         }
 
-        .pro-info p {
-            margin: 0;
-            color: #888;
-            font-size: 0.8rem;
-        }
-
-        .social-links {
-            display: flex;
-            gap: 8px;
-        }
-
-        .social-links a {
-            color: #5c85d6;
-            text-decoration: none;
-            font-size: 0.8rem;
-            font-weight: bold;
-            background-color: #2a2a2a;
-            padding: 4px 10px;
-            border-radius: 5px;
-            transition: background-color 0.2s;
-        }
-
-        .social-links a:hover {
-            background-color: #3a3a3a;
-        }
-
-        /* Divider between pros if multiple */
-        .pro-divider {
-            border: none;
-            border-top: 1px solid #2a2a2a;
-            margin: 4px 0;
-        }
+        .pro-info h2 { margin: 0 0 3px 0; font-size: 1.1rem; }
+        .pro-info p { margin: 0; color: #888; font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -186,7 +175,7 @@
     </div>
 
     <div id="error-message"></div>
-    <div id="loader" class="loader">Searching database...</div>
+    <div id="loader" class="loader">Scanning Riot API & Database...</div>
     <div id="results-container"></div>
 
     <script>
@@ -196,64 +185,104 @@
         const loader = document.getElementById('loader');
         const resultsContainer = document.getElementById('results-container');
 
+        // Formats timestamps to actual dates
         function formatDate(timestampMs) {
             const date = new Date(timestampMs);
             return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
         }
 
-        function renderResults(data) {
-            if (data.matches_found === 0) {
-                resultsContainer.innerHTML = `<div class="summary-text">No matches found against pros in our database.</div>`;
+        // Extracts Solo/Duo rank if available
+        function getRankString(rankData) {
+            if (!rankData || rankData.length === 0) return "Unranked";
+            const soloQ = rankData.find(r => r.queueType === "RANKED_SOLO_5x5");
+            if (!soloQ) return "Unranked in SoloQ";
+            return `${soloQ.tier} ${soloQ.rank} - ${soloQ.leaguePoints} LP`;
+        }
+
+        // --- RENDER LIVE GAME ---
+        function renderLive(data) {
+            const rankString = getRankString(data.rank_data);
+            
+            let prosHtml = "";
+            if (data.pros_in_game.length === 0) {
+                prosHtml = `<div class="summary-text" style="margin-top:20px;">No pros detected in this live game.</div>`;
+            } else {
+                prosHtml = data.pros_in_game.map(pro => `
+                    <div class="pro-row">
+                        <div class="pro-info">
+                            <h2>🚨 ${pro.pro_name}</h2>
+                            <p>Smurfing as: ${pro.playing_as_account}</p>
+                            <p>Champion ID: ${pro.champion_id}</p>
+                        </div>
+                        <div class="mastery-text">
+                            True Mastery:<br>
+                            ${pro.true_combined_mastery.toLocaleString()} pts
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            resultsContainer.innerHTML = `
+                <div class="live-badge">
+                    <div class="pulse-dot"></div>
+                    LIVE MATCH DETECTED
+                </div>
+                <div class="player-header">
+                    <h2>${data.searched_player}</h2>
+                    <div class="rank-text">${rankString}</div>
+                </div>
+                <div class="match-card">
+                    <div class="match-header">
+                        <span>Pro Radar Alert</span>
+                    </div>
+                    ${prosHtml}
+                </div>
+            `;
+            resultsContainer.style.display = 'block';
+        }
+
+        // --- RENDER MATCH HISTORY ---
+        function renderHistory(data) {
+            if (!data.history || data.history.length === 0) {
+                resultsContainer.innerHTML = `<div class="summary-text">Player is not in-game, and no historical matches against pros were found.</div>`;
                 resultsContainer.style.display = 'block';
                 return;
             }
 
-            const cardsHtml = data.matches.map(match => {
-                const proCount = match.pros.length;
+            const cardsHtml = data.history.map(match => {
+                const proCount = match.pros_in_game.length;
                 const proLabel = proCount === 1 ? '1 Pro' : `${proCount} Pros`;
 
-                const rosterHtml = match.pros.map((pro, i) => `
-                    ${i > 0 ? '<hr class="pro-divider">' : ''}
+                const rosterHtml = match.pros_in_game.map(pro => `
                     <div class="pro-row">
                         <div class="pro-info">
                             <h2>${pro.pro_name}</h2>
-                            <p>${pro.pro_riot_id}</p>
-                        </div>
-                        <div class="social-links">
-                            ${pro.twitch  ? `<a href="${pro.twitch}"  target="_blank">Twitch</a>`  : ''}
-                            ${pro.twitter ? `<a href="${pro.twitter}" target="_blank">Twitter</a>` : ''}
-                            ${pro.youtube ? `<a href="${pro.youtube}" target="_blank">YouTube</a>` : ''}
+                            <p>${pro.account}</p>
                         </div>
                     </div>
                 `).join('');
 
                 return `
                     <div class="match-card">
-                        <a href="${match.stats_url}" target="_blank" class="match-header">
-                            <div class="match-header-left">
+                        <div class="match-header">
+                            <div>
                                 <span class="pro-count-badge">${proLabel}</span>
-                                <span>Match ${match.match_id.split('_')[1]}</span>
-                                <span>•</span>
                                 <span>${formatDate(match.timestamp)}</span>
                             </div>
-                            <div class="match-header-right">View Stats 📈</div>
-                        </a>
-                        <div class="pro-roster">
-                            ${rosterHtml}
                         </div>
+                        <div>${rosterHtml}</div>
                     </div>
                 `;
             }).join('');
 
             resultsContainer.innerHTML = `
-                <div class="summary-text">
-                    Found <strong>${data.matches_found}</strong> game${data.matches_found > 1 ? 's' : ''} with pros in the last 30 days!
-                </div>
+                <div class="summary-text">Player is not in-game. Showing historical matches:</div>
                 <div class="match-list">${cardsHtml}</div>
             `;
             resultsContainer.style.display = 'block';
         }
 
+        // --- MAIN SEARCH LOGIC ---
         async function executeSearch() {
             const inputValue = riotInput.value.trim();
             errorMessage.textContent = '';
@@ -273,13 +302,22 @@
             loader.style.display = 'block';
 
             try {
-                const response = await fetch(`http://localhost:8000/api/search?gameName=${encodeURIComponent(gameName)}&tagLine=${encodeURIComponent(tagLine)}`);
-
-                if (!response.ok) throw new Error("Riot ID not found or server error.");
-
-                const responseData = await response.json();
+                // Completely fixed string interpolation here!
+                const url = `http://127.0.0.1:8000/api/player/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
                 loader.style.display = 'none';
-                renderResults(responseData);
+
+                if (!response.ok) {
+                    throw new Error(data.detail || "Error connecting to backend.");
+                }
+
+                if (data.status === "live") {
+                    renderLive(data);
+                } else if (data.status === "history") {
+                    renderHistory(data);
+                }
 
             } catch (error) {
                 loader.style.display = 'none';

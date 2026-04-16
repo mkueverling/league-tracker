@@ -20,6 +20,9 @@ SCRAPER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
+# --- NEW: EASY RESUME VARIABLE ---
+START_PAGE = 52
+
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"), port=os.getenv("DB_PORT"),
@@ -90,7 +93,8 @@ def sync_everything():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    page = 1
+    # --- CHANGED: NOW USES YOUR CONFIG VARIABLE ---
+    page = START_PAGE
     total_new_pros = 0
 
     while True:
