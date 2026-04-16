@@ -1,129 +1,160 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import requests
-import os
-import urllib.parse
-import psycopg2
-import psycopg2.extras
+import requests, os, urllib.parse, psycopg2, time
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv, find_dotenv
-import time
 
-# --- CONFIGURATION ---
 load_dotenv(find_dotenv(), override=True)
 API_KEY = os.getenv("RIOT_API_KEY")
 HEADERS = {"X-Riot-Token": API_KEY}
-
-REGION = "europe"
-PLATFORM = "euw1" 
+REGION, PLATFORM = "europe", "euw1"
 
 app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 def get_db_connection():
     return psycopg2.connect(
-        host=os.getenv("DB_HOST"), port=os.getenv("DB_PORT"),
-        database=os.getenv("DB_NAME"), user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
+        host=os.getenv("DB_HOST"), 
+        database=os.getenv("DB_NAME"), 
+        user=os.getenv("DB_USER"), 
+        password=os.getenv("DB_PASSWORD"),
+        connect_timeout=5
     )
 
-@app.get("/api/player/{game_name}/{tag_line}")
-def get_player_data(game_name: str, tag_line: str):
-    # 1. Get Searcher Info
-    safe_name = urllib.parse.quote(game_name.strip())
-    safe_tag = urllib.parse.quote(tag_line.strip())
-    
-    acc_url = f"https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{safe_name}/{safe_tag}"
-    acc_res = requests.get(acc_url, headers=HEADERS)
-    
-    if acc_res.status_code != 200:
-        raise HTTPException(status_code=acc_res.status_code, detail="Player not found.")
-        
-    target_puuid = acc_res.json()['puuid']
+def get_rank_info(puuid):
+    if not puuid: return "unranked"
+    try:
+        url = f"https://{PLATFORM}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"
+        res = requests.get(url, headers=HEADERS, timeout=3)
+        if res.status_code == 200:
+            data = res.json()
+            for entry in data:
+                if entry.get('queueType') == 'RANKED_SOLO_5x5':
+                    return entry.get('tier', 'unranked').lower()
+    except Exception: pass
+    return "unranked"
 
-    # 2. Check for Active Game
-    spec_url = f"https://{PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{target_puuid}"
-    spec_res = requests.get(spec_url, headers=HEADERS)
-    
-    if spec_res.status_code == 200:
+def get_streak_tag(cursor, puuid):
+    if not puuid: return None
+    try:
+        cursor.execute("""
+            SELECT mp.win FROM Match_Participants mp 
+            JOIN Matches m ON mp.match_id = m.match_id 
+            WHERE mp.puuid = %s 
+            ORDER BY m.timestamp DESC LIMIT 10
+        """, (puuid,))
+        history = cursor.fetchall()
+        if not history: return None
+        
+        wins, losses = 0, 0
+        stype = "win" if history[0]['win'] else "loss"
+        for g in history:
+            if stype == "win" and g['win']: wins += 1
+            elif stype == "loss" and not g['win']: losses += 1
+            else: break
+        
+        tags = {7: "Winners Queue", 5: "On Fire", 3: "Winning"} if stype == "win" else {7: "Losers Queue", 5: "Tilted", 3: "Unlucky"}
+        for threshold, label in tags.items():
+            if (wins if stype == "win" else losses) >= threshold: return label
+    except Exception: pass
+    return None
+
+@app.get("/api/player/{name}/{tag}")
+def get_player(name: str, tag: str):
+    conn = None
+    try:
+        acc_url = f"https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{urllib.parse.quote(name)}/{urllib.parse.quote(tag)}"
+        acc_res = requests.get(acc_url, headers=HEADERS, timeout=5)
+        if acc_res.status_code != 200:
+            raise HTTPException(status_code=404, detail="Player not found")
+        target_puuid = acc_res.json().get('puuid')
+
+        spec_url = f"https://{PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{target_puuid}"
+        spec_res = requests.get(spec_url, headers=HEADERS, timeout=5)
+        if spec_res.status_code != 200:
+            return {"status": "history"}
+
         game_data = spec_res.json()
-        participants = game_data['participants']
-        
-        participant_puuids = [p.get('puuid').strip() for p in participants if p.get('puuid')]
-        participant_names = [p.get('riotId').strip() for p in participants if p.get('riotId')]
-
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        searcher_team_id = next((p['teamId'] for p in game_data['participants'] if p.get('puuid') == target_puuid), 100)
+        searcher_tag = get_streak_tag(cursor, target_puuid)
         
-        # Dual-match search
-        query = "SELECT puuid, pro_id, riot_id FROM Accounts WHERE puuid = ANY(%s) OR riot_id = ANY(%s)"
-        cursor.execute(query, (participant_puuids, participant_names))
-        found_pros_db = cursor.fetchall()
-        
-        pro_details = []
-        print(f"\n✅ Found {len(found_pros_db)} pro accounts in this lobby.")
+        allies, enemies = [], []
+        ally_m_total, enemy_m_total = 0, 0
+        ally_streaks, enemy_streaks = 0, 0
 
-        for pro_puuid_db, pro_id, pro_riot_id_db in found_pros_db:
-            # Match back to live participant
-            p_match = next((p for p in participants if p.get('puuid') == pro_puuid_db or p.get('riotId') == pro_riot_id_db), None)
-            if not p_match: continue
+        for p in game_data['participants']:
+            raw_p_puuid = p.get('puuid')
+            puuid = raw_p_puuid.strip() if raw_p_puuid else None
+            riot_id = p.get('riotId', 'Unknown').strip()
+            champ_id = p.get('championId', 0)
             
-            champ_id = p_match.get('championId', 0)
-            live_puuid = p_match.get('puuid') # This is the "Fresh" Platform PUUID
+            is_streamer = puuid is None
+            pro_entry, cur_mast, tot_mast, tag_disp, rank_tier = None, 0, 0, None, "unranked"
 
-            cursor.execute("SELECT name FROM Pros WHERE pro_id = %s", (pro_id,))
-            pro_name = cursor.fetchone()[0]
+            if not is_streamer:
+                # 1. Identify the Pro by current account
+                cursor.execute("""
+                    SELECT p.pro_id, p.name 
+                    FROM Pros p 
+                    JOIN Accounts a ON p.pro_id = a.pro_id 
+                    WHERE a.puuid = %s OR a.riot_id = %s 
+                    LIMIT 1
+                """, (puuid, riot_id))
+                pro_entry = cursor.fetchone()
+                
+                rank_tier = get_rank_info(puuid)
+                p_streak = get_streak_tag(cursor, puuid)
 
-            # Get all accounts for this pro
-            cursor.execute("SELECT puuid, riot_id FROM Accounts WHERE pro_id = %s", (pro_id,))
-            all_accounts = cursor.fetchall()
-            
-            total_mastery = 0
-            print(f"📊 {pro_name} (Champ {champ_id}):")
-            
-            for acc_puuid_db, acc_riot_id in all_accounts:
-                time.sleep(0.05)
+                # 2. Get Mastery for Current Account
+                m_res = requests.get(f"https://{PLATFORM}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/by-champion/{champ_id}", headers=HEADERS, timeout=3)
+                if m_res.status_code == 200: 
+                    cur_mast = m_res.json().get('championPoints', 0)
                 
-                # IMPORTANT: If this is the account they are CURRENTLY playing on,
-                # use the live_puuid from the spectator API instead of the DB puuid.
-                puuid_to_check = live_puuid if acc_riot_id == p_match.get('riotId') else acc_puuid_db
+                tot_mast = cur_mast # Start with current account points
                 
-                m_url = f"https://{PLATFORM}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid_to_check.strip()}/by-champion/{champ_id}"
-                m_res = requests.get(m_url, headers=HEADERS)
+                # 3. If it's a Pro, find ALL linked accounts and sum them
+                if pro_entry:
+                    cursor.execute("SELECT puuid FROM Accounts WHERE pro_id = %s", (pro_entry['pro_id'],))
+                    all_linked_puuids = [row['puuid'].strip() for row in cursor.fetchall()]
+                    
+                    for s_puuid in all_linked_puuids:
+                        # Skip the one we already checked
+                        if s_puuid == puuid:
+                            continue
+                        
+                        time.sleep(0.05) # Rate Limit Safety
+                        m_res_alt = requests.get(f"https://{PLATFORM}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{s_puuid}/by-champion/{champ_id}", headers=HEADERS, timeout=3)
+                        if m_res_alt.status_code == 200:
+                            tot_mast += m_res_alt.json().get('championPoints', 0)
                 
-                if m_res.status_code == 200:
-                    pts = m_res.json().get('championPoints', 0)
-                    total_mastery += pts
-                    print(f"   + {pts} pts from {acc_riot_id}")
+                tag_disp = tag_disp or (searcher_tag if puuid == target_puuid else p_streak)
+                if p_streak == "Winners Queue" and tot_mast > 200000: tag_disp = "YOU'RE COOKED"
+                
+                if p['teamId'] == searcher_team_id:
+                    ally_m_total += tot_mast
+                    if tag_disp in ["Winning", "On Fire", "Winners Queue"]: ally_streaks += 1
                 else:
-                    # If it fails, try the other PUUID just in case
-                    alt_puuid = acc_puuid_db if puuid_to_check == live_puuid else live_puuid
-                    m_res_alt = requests.get(f"https://{PLATFORM}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{alt_puuid.strip()}/by-champion/{champ_id}", headers=HEADERS)
-                    if m_res_alt.status_code == 200:
-                        pts = m_res_alt.json().get('championPoints', 0)
-                        total_mastery += pts
-                        print(f"   + {pts} pts from {acc_riot_id} (via alt ID)")
+                    enemy_m_total += tot_mast
+                    if tag_disp in ["Winning", "On Fire", "Winners Queue"]: enemy_streaks += 1
 
-            pro_details.append({
-                "pro_name": pro_name,
-                "playing_as_account": p_match.get('riotId', pro_riot_id_db),
-                "champion_id": champ_id,
-                "true_combined_mastery": total_mastery
-            })
+            p_payload = {
+                "puuid": puuid, "riotId": riot_id if not is_streamer else "STREAMER MODE",
+                "is_streamer": is_streamer, "championId": champ_id, "is_pro": pro_entry is not None,
+                "pro_name": pro_entry['name'] if pro_entry else None, "rank": rank_tier,
+                "current_mastery": cur_mast, "total_mastery": tot_mast, "tag": tag_disp,
+                "side": "ally" if p['teamId'] == searcher_team_id else "enemy"
+            }
+            if p['teamId'] == searcher_team_id: allies.append(p_payload)
+            else: enemies.append(p_payload)
 
-        cursor.close()
-        conn.close()
+        ff_angle = (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0)
+        return {"status": "live", "allies": allies, "enemies": enemies, "ff_angle": ff_angle}
 
-        return {
-            "status": "live",
-            "searched_player": f"{game_name}#{tag_line}",
-            "pros_in_game": pro_details
-        }
-
-    return {"status": "history", "searched_player": f"{game_name}#{tag_line}", "history": []}
+    except Exception as e:
+        print(f"ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
