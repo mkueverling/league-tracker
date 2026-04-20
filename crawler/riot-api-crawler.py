@@ -30,8 +30,8 @@ def get_high_water_mark(cursor, puuid):
     """Finds the most recent match timestamp to prevent duplicate processing."""
     cursor.execute("""
         SELECT MAX(m.timestamp) 
-        FROM Matches m
-        JOIN Match_Participants mp ON m.match_id = mp.match_id
+        FROM matches m
+        JOIN match_participants mp ON m.match_id = mp.match_id
         WHERE mp.puuid = %s
     """, (puuid,))
     result = cursor.fetchone()[0]
@@ -46,9 +46,9 @@ def process_incremental_load():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # --- NEW: SMART RESUME LOGIC ---
+    # --- SMART RESUME LOGIC ---
     # Always grab the accounts that haven't been checked in the longest time first
-    cursor.execute("SELECT puuid, riot_id FROM Accounts ORDER BY last_checked ASC NULLS FIRST")
+    cursor.execute("SELECT puuid, riot_id FROM accounts ORDER BY last_checked ASC NULLS FIRST")
     accounts = cursor.fetchall()
     print(f"Targeting {len(accounts)} total accounts.")
 
@@ -72,21 +72,21 @@ def process_incremental_load():
                 time.sleep(30)
                 continue 
             
-            # --- NEW: 400 ERROR DIAGNOSTIC ---
+            # --- 400 ERROR DIAGNOSTIC ---
             elif response.status_code == 400:
                 print(f"   [!] HTTP 400 Bad Request.")
                 print(f"       -> URL Attempted: {url}")
                 print(f"       -> Riot's Error: {response.text}")
                 
                 # We still update the check time so it doesn't get stuck in a loop on this broken account
-                cursor.execute("UPDATE Accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
+                cursor.execute("UPDATE accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
                 conn.commit()
                 continue
 
             elif response.status_code != 200:
                 print(f"   [!] Error fetching match list: {response.status_code}")
                 # Update check time on failure so we move on
-                cursor.execute("UPDATE Accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
+                cursor.execute("UPDATE accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
                 conn.commit()
                 continue
                 
@@ -94,8 +94,8 @@ def process_incremental_load():
             if not match_ids:
                 print("   No new matches found.")
                 
-                # --- NEW: STAMP THE ACCOUNT AS CHECKED ---
-                cursor.execute("UPDATE Accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
+                # --- STAMP THE ACCOUNT AS CHECKED ---
+                cursor.execute("UPDATE accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
                 conn.commit()
                 continue
 
@@ -112,18 +112,24 @@ def process_incremental_load():
                     if match_res.status_code == 200:
                         data = match_res.json()
                         timestamp = data["info"]["gameCreation"]
-                        participants = data["metadata"]["participants"]
+                        
+                        # Note: We now pull from info['participants'] instead of metadata to get the WIN status!
+                        participants_data = data["info"]["participants"]
                         
                         cursor.execute("""
-                            INSERT INTO Matches (match_id, timestamp) 
+                            INSERT INTO matches (match_id, timestamp) 
                             VALUES (%s, %s) ON CONFLICT (match_id) DO NOTHING
                         """, (match_id, timestamp))
                         
-                        for p_puuid in participants:
+                        # Loop through all 10 players in the match data
+                        for p in participants_data:
+                            p_puuid = p["puuid"]
+                            p_win = p["win"]  # Extracts the boolean True/False
+                            
                             cursor.execute("""
-                                INSERT INTO Match_Participants (match_id, puuid) 
-                                VALUES (%s, %s) ON CONFLICT (match_id, puuid) DO NOTHING
-                            """, (match_id, p_puuid))
+                                INSERT INTO match_participants (match_id, puuid, win) 
+                                VALUES (%s, %s, %s) ON CONFLICT (match_id, puuid) DO NOTHING
+                            """, (match_id, p_puuid, p_win))
                         
                         conn.commit()
                         print(f"      [✓] {match_id} saved.")
@@ -138,8 +144,8 @@ def process_incremental_load():
                     print(f"      [!] Critical error on match {match_id}: {match_err}")
                     continue 
 
-            # --- NEW: STAMP THE ACCOUNT AS CHECKED (AFTER DOWNLOADING MATCHES) ---
-            cursor.execute("UPDATE Accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
+            # --- STAMP THE ACCOUNT AS CHECKED (AFTER DOWNLOADING MATCHES) ---
+            cursor.execute("UPDATE accounts SET last_checked = NOW() WHERE puuid = %s", (puuid,))
             conn.commit()
 
         except Exception as player_err:

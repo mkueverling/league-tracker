@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Tracker</title>
+    <title>Pro Tracker - Fluid Prestige UI</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,35 +13,51 @@
 </head>
 <body>
 
-<button id="theme-toggle" class="theme-toggle">☀️</button>
-
-<div id="history-panel" class="history-panel">
-    <span class="close-btn" id="close-panel-btn">✕ CLOSE ARENA ANALYTICS</span>
-    <h1 id="panel-player-name" style="font-size: 2.5rem; margin-top: 0;">PLAYER</h1>
-    <p id="panel-riot-id" style="color: var(--text-muted); margin-top: -15px;"></p>
-    
-    <div id="panel-profile-section"></div>
-
-    <div style="height: 2px; background: var(--border); margin: 20px 0;"></div>
-    <div id="history-loading">Fetching match history...</div>
-</div>
-
-<div class="arena" id="arena">
-    <svg id="laser-canvas" class="laser-canvas">
-        <path id="laser-beam" d="" />
-    </svg>
-
-    <div id="left-team" class="team-box"></div>
-    <div class="bridge">
+<header class="top-header">
+    <div class="header-left">
+        <div class="logo">PRO TRACKER</div>
+        <div class="region-selector">
+            <span class="active">EUW</span>
+            <span class="disabled tooltip-box" data-tooltip="Not currently supported">NA</span>
+            <span class="disabled tooltip-box" data-tooltip="Not currently supported">KR</span>
+        </div>
+    </div>
+    <div class="header-right">
         <div class="search-area">
             <div class="search-container" id="search-container">
                 <input type="text" id="target" placeholder="TARGET#TAG" autocomplete="off">
-                <div id="search-icon" class="search-icon">🔍</div>
-                <div id="scan-loader" class="scan-loader"></div>
+                <div id="search-icon" class="search-icon" style="cursor: pointer;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </div>
+                <div id="scan-loader" class="loader-ring" style="display: none; position: absolute; right: 12px; width: 16px; height: 16px; margin-top: 0;"></div>
             </div>
         </div>
+        <button class="share-btn" onclick="copyLobbyLink(this)">SHARE</button>
     </div>
+</header>
+
+<div class="top-zone">
+    <div class="intel-banner-container">
+        <div class="intel-banner" id="intel-banner"><span class="intel-text" id="intel-text"></span></div>
+    </div>
+</div>
+
+<div class="arena" id="arena">
+    <div id="left-team" class="team-box"></div>
     <div id="right-team" class="team-box"></div>
+</div>
+
+<div class="bottom-zone"></div>
+
+<footer class="legal-footer">
+    Pro Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.
+</footer>
+
+<div id="history-panel" class="history-panel">
+    <div class="sidebar-content">
+        <span class="close-btn" id="close-panel-btn">✕ CLOSE</span>
+        <div id="history-loading"></div>
+    </div>
 </div>
 
 <script src="app.js"></script>

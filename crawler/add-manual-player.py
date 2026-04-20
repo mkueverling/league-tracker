@@ -7,7 +7,6 @@ import sys
 from dotenv import load_dotenv, find_dotenv
 
 # --- CONFIGURATION ---
-# Automatically searches for the .env file in the current and parent directories
 load_dotenv(find_dotenv(), override=True)
 
 API_KEY = os.getenv("RIOT_API_KEY")
@@ -25,30 +24,28 @@ def get_db_connection():
         sys.exit(1)
 
 def add_custom_pro():
-    print("=== Manual Pro Entry Tool ===\n")
+    print("=== Manual Pro Entry Tool (Unified Schema) ===\n")
     
-    # 1. Gather Pro Details
-    pro_name = input("Enter Pro Name: ").strip()
-    if not pro_name:
-        print("Pro name cannot be empty. Exiting.")
+    known_name = input("Enter Pro/Known Name: ").strip()
+    if not known_name:
+        print("Name cannot be empty. Exiting.")
         return
 
-    print("\n(Press Enter to skip socials)")
-    twitch = input("Twitch URL: ").strip() or None
-    twitter = input("Twitter/X URL: ").strip() or None
-    youtube = input("YouTube URL: ").strip() or None
+    # NEW: Ask for a special tag
+    special_tag = input("Enter Special Tag (e.g., THE DEV) or press Enter to skip: ").strip()
+    if not special_tag:
+        special_tag = None
 
-    # 2. Gather Accounts
     accounts_to_add = []
     print("\nEnter Riot IDs one by one (format: Name#Tag).")
-    print("When you are finished, just press Enter on an empty line.")
+    print("Press Enter on an empty line when finished.")
     
     while True:
         riot_id = input("> Riot ID: ").strip()
         if not riot_id:
             break
         if '#' not in riot_id:
-            print("  [!] Invalid format. Must include a '#' (e.g., fthr#eu5)")
+            print("  [!] Invalid format. Must include a '#' (e.g., Agurin#EUW)")
             continue
         accounts_to_add.append(riot_id)
 
@@ -56,59 +53,60 @@ def add_custom_pro():
         print("\nNo accounts entered. Exiting.")
         return
 
-    # 3. Database & API Execution
-    print(f"\n--- Saving {pro_name} and {len(accounts_to_add)} accounts to Database ---")
+    print(f"\n--- Saving {known_name} and {len(accounts_to_add)} accounts ---")
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Insert the Pro
-        cursor.execute("""
-            INSERT INTO Pros (name, twitch_url, twitter_url, youtube_url) 
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (name) DO UPDATE SET 
-                twitch_url = COALESCE(EXCLUDED.twitch_url, Pros.twitch_url),
-                twitter_url = COALESCE(EXCLUDED.twitter_url, Pros.twitter_url),
-                youtube_url = COALESCE(EXCLUDED.youtube_url, Pros.youtube_url)
-            RETURNING pro_id;
-        """, (pro_name, twitch, twitter, youtube))
+        slug_name = known_name.lower().replace(" ", "-")
         
-        pro_id = cursor.fetchone()[0]
-        print(f"[✓] Created/Found Pro: {pro_name} (Database ID: {pro_id})")
+        # Determine if they are a creator based on if they got a special tag
+        is_creator = True if special_tag else False
+        
+        cursor.execute("""
+            INSERT INTO players (name, known_name, is_pro, is_creator, special_tag) 
+            VALUES (%s, %s, TRUE, %s, %s)
+            ON CONFLICT (name) DO UPDATE SET 
+                known_name = COALESCE(players.known_name, EXCLUDED.known_name),
+                is_pro = TRUE,
+                is_creator = EXCLUDED.is_creator,
+                special_tag = COALESCE(EXCLUDED.special_tag, players.special_tag)
+            RETURNING player_id;
+        """, (slug_name, known_name, is_creator, special_tag))
+        
+        player_id = cursor.fetchone()[0]
+        print(f"[✓] Player Record Ready: {known_name} (ID: {player_id})")
 
-        # Fetch PUUIDs and Insert Accounts
         for riot_id in accounts_to_add:
             game_name, tag_line = riot_id.split('#', 1)
-            
             safe_name = urllib.parse.quote(game_name.strip())
             safe_tag = urllib.parse.quote(tag_line.strip())
             
             riot_url = f"https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{safe_name}/{safe_tag}"
             
-            time.sleep(1.25) # Respect Riot Rate Limit
+            time.sleep(1.2)
             response = requests.get(riot_url, headers=RIOT_HEADERS)
             
             if response.status_code == 200:
                 puuid = response.json()['puuid']
                 
                 cursor.execute("""
-                    INSERT INTO Accounts (puuid, pro_id, riot_id)
+                    INSERT INTO accounts (puuid, player_id, riot_id)
                     VALUES (%s, %s, %s)
-                    ON CONFLICT (puuid) DO UPDATE SET riot_id = EXCLUDED.riot_id;
-                """, (puuid, pro_id, riot_id))
+                    ON CONFLICT (puuid) DO UPDATE SET 
+                        riot_id = EXCLUDED.riot_id,
+                        player_id = EXCLUDED.player_id;
+                """, (puuid, player_id, riot_id))
                 
-                print(f"   -> [SUCCESS] {riot_id} linked successfully.")
-            
-            elif response.status_code == 404:
-                print(f"   -> [FAILED]  {riot_id} (Not found in Riot API. Check spelling.)")
+                print(f"   -> [SUCCESS] {riot_id} linked.")
             else:
-                print(f"   -> [FAILED]  {riot_id} (Riot HTTP {response.status_code})")
+                print(f"   -> [FAILED]  {riot_id} (HTTP {response.status_code})")
 
         conn.commit()
         print("\n=== Manual Entry Complete ===")
 
     except Exception as e:
-        print(f"\n[!] Database error: {e}")
+        print(f"\n[!] error: {e}")
         conn.rollback()
     finally:
         cursor.close()
