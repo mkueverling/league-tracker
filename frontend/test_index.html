@@ -38,7 +38,8 @@
         body { 
             margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(--text-main); 
             font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif; 
-            display: flex; flex-direction: column; align-items: center; min-height: 100vh; overflow-x: hidden; 
+            display: flex; flex-direction: column; align-items: center; 
+            height: 100vh; overflow: hidden; 
             box-sizing: border-box;
         }
 
@@ -47,11 +48,11 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 70px;
             background: var(--card); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-card);
             display: flex; align-items: center; justify-content: space-between; 
-            padding: 0 15vw; 
+            padding: 0 clamp(50px, 12vw, 15vw); 
             box-sizing: border-box; z-index: 100;
         }
-        .header-left { display: flex; align-items: center; gap: 30px; }
-        .logo { font-size: 1.5rem; font-weight: 900; color: var(--text-main); letter-spacing: 2px; font-style: italic; }
+        .header-left { display: flex; align-items: center; gap: clamp(15px, 2vw, 30px); }
+        .logo { font-size: clamp(1.2rem, 1.5vw, 1.5rem); font-weight: 900; color: var(--text-main); letter-spacing: 2px; font-style: italic; white-space: nowrap; }
         
         .region-selector { display: flex; gap: 8px; background: var(--item-bg); padding: 5px; border-radius: 6px; border: 1px solid var(--border); }
         .region-selector span { padding: 4px 12px; font-size: 0.85rem; font-weight: 700; border-radius: 4px; cursor: pointer; color: var(--text-muted); transition: 0.2s; }
@@ -59,7 +60,7 @@
         .region-selector span.active { background: var(--blue); color: #fff; }
         .region-selector span.disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .header-right { display: flex; align-items: center; gap: 15px; }
+        .header-right { display: flex; align-items: center; gap: clamp(10px, 1.5vw, 15px); }
 
         /* --- HEADER BUTTONS --- */
         .share-btn {
@@ -79,9 +80,9 @@
         .discord-btn:hover { background: #4752C4; transform: translateY(-2px); }
 
         /* --- SEARCH AREA --- */
-        .search-area { width: clamp(200px, 15vw, 250px); position: relative; }
+        .search-area { width: clamp(180px, 15vw, 250px); position: relative; }
         .search-container {
-            position: relative; background: var(--search-bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 15px; display: flex; align-items: center;
+            position: relative; background: var(--search-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 15px; display: flex; align-items: center;
             transition: 0.3s;
         }
         .search-container input { background: none; border: none; width: 100%; color: var(--text-main); font-size: 1.1rem; outline: none; }
@@ -91,21 +92,21 @@
 
         /* --- FLEXBOX SPACERS FOR PERFECT CENTERING --- */
         .top-zone {
-            flex: 1; /* Takes up 50% of the remaining vertical space */
+            flex: 1; 
             width: 100%;
             display: flex;
-            align-items: center; /* Suspends Game Info exactly in the middle of this zone */
+            align-items: center; 
             justify-content: center;
-            min-height: 40px; /* Prevents crushing on very small screens */
-            padding: 10px 20px;
+            min-height: 5px; 
+            padding: 5px 20px;
             box-sizing: border-box;
             z-index: 10;
         }
         
         .bottom-zone {
-            flex: 1; /* Takes up the other 50%, perfectly balancing the top-zone */
+            flex: 1; 
             width: 100%;
-            min-height: 20px;
+            min-height: 5px;
         }
 
         /* --- TACTICAL INTEL TEXT --- */
@@ -114,23 +115,23 @@
             width: 100%; max-width: 95vw; display: none; align-items: center; justify-content: center; gap: 10px;
             animation: fadeInDown 0.5s ease forwards;
         }
-        .intel-text { font-size: clamp(0.9rem, 1vw, 1.15rem); color: var(--text-main); font-style: italic; line-height: 1.6; text-align: center; width: 100%; }
-        .intel-accent { color: var(--gold); font-weight: 900; font-style: normal; letter-spacing: 1px; text-transform: uppercase; margin-right: 6px; }
+        .intel-text { font-size: clamp(0.95rem, 1.1vw, 1.15rem); color: var(--text-main); font-family: monospace; font-weight: 700; line-height: 1.5; text-align: center; width: 100%; }
+        .intel-accent { color: var(--gold); font-weight: 900; font-family: 'Roboto', sans-serif; letter-spacing: 1px; text-transform: uppercase; margin-right: 6px; }
         @keyframes fadeInDown { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
 
         /* --- ARENA GRID --- */
         .arena { 
             position: relative; display: grid; width: 100%; max-width: 95vw; 
             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); 
-            align-items: flex-start; gap: 8vw; padding: 0 20px; box-sizing: border-box; 
-            flex: none; /* Keeps its natural height, letting the top/bottom zones stretch */
+            align-items: flex-start; gap: clamp(4vw, 8vw, 10vw); padding: 0 20px; box-sizing: border-box; 
+            flex: none; 
         }
-        .team-box { display: flex; flex-direction: column; gap: clamp(10px, 2vh, 25px); z-index: 5; min-width: 0; }
+        .team-box { display: flex; flex-direction: column; gap: clamp(6px, 1.5vh, 25px); z-index: 5; min-width: 0; }
 
         /* --- PRESTIGE DATA ROW --- */
         .card { 
             position: relative; 
-            height: clamp(100px, 11vh, 170px); 
+            height: clamp(70px, 11vh, 170px); 
             background: var(--card); border-radius: 6px; 
             border: 1px solid var(--border); box-shadow: var(--shadow-card); cursor: pointer; transition: 0.2s; opacity: 0; 
             overflow: visible; width: 100%;
@@ -143,7 +144,7 @@
         .connection-tab {
             position: absolute;
             top: -12px;
-            font-size: 0.65rem;
+            font-size: clamp(0.65rem, 1.2vh, 0.75rem);
             font-weight: 900;
             padding: 4px 12px;
             border-radius: 4px;
@@ -159,16 +160,26 @@
         .ally-card .connection-tab { right: 20px; }
         .enemy-card .connection-tab { left: 20px; }
         
-        .tab-nemesis { background: linear-gradient(135deg, #8e44ad, #c0392b); } /* Perfect Mirror */
+        .tab-nemesis { background: linear-gradient(135deg, #8e44ad, #c0392b); } 
         .tab-familiar { background: linear-gradient(135deg, #2980b9, #27ae60); }
         .tab-highlight { color: var(--gold); margin-left: 6px; }
 
         /* --- TEAM SUMMARY BANNER --- */
         .summary-card { 
-            height: clamp(55px, 6vh, 70px) !important; cursor: default; background: var(--search-bg); opacity: 1 !important; 
-            z-index: 10; border-style: dashed; animation: fadeIn 0.5s ease forwards;
+            height: clamp(45px, 6vh, 70px) !important; cursor: default; background: transparent !important; 
+            border: none !important; box-shadow: none !important; opacity: 1 !important; 
+            z-index: 10; animation: fadeIn 0.5s ease forwards;
         }
-        .summary-card:hover { transform: none !important; box-shadow: var(--shadow-card) !important; background: var(--search-bg); border-color: var(--border); }
+        .summary-card.ally-card::before {
+            content: ''; position: absolute; top: 0; bottom: 0; right: 0; left: 36%; 
+            background: var(--search-bg); border: 1px dashed var(--border); border-left: 4px solid var(--blue);
+            border-radius: 6px; box-shadow: var(--shadow-card); z-index: 0; transition: 0.2s;
+        }
+        .summary-card.enemy-card::before {
+            content: ''; position: absolute; top: 0; bottom: 0; left: 0; right: 36%; 
+            background: var(--search-bg); border: 1px dashed var(--border); border-right: 4px solid var(--red);
+            border-radius: 6px; box-shadow: var(--shadow-card); z-index: 0; transition: 0.2s;
+        }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         /* --- STEAM/DISCORD ANIMATED CARD EFFECTS --- */
@@ -196,9 +207,11 @@
         
         .enemy-card .champ-splash {
             left: auto; right: 0;
+            background-position: 30% 20%; 
             -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%);
             mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%);
         }
+        .ally-card .champ-splash { background-position: 70% 20%; }
 
         .row-content { 
             position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; width: 100%; height: 100%; box-sizing: border-box;
@@ -223,25 +236,25 @@
         .riot-id-wrapper { display: flex; align-items: baseline; width: 100%; }
         .enemy-card .riot-id-wrapper { justify-content: flex-end; }
         
-        .main-name { font-size: clamp(0.8rem, 10cqw, 1.8rem); font-weight: 800; margin: 0; color: var(--text-main); }
-        .pro-label { color: var(--gold); font-size: clamp(0.9rem, 12cqw, 2rem); font-weight: 900; line-height: 1; margin: 0 0 2px 0; text-transform: uppercase; text-shadow: var(--text-shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
-        .smurf-tag { font-size: clamp(0.6rem, 8cqw, 1.2rem); color: var(--text-muted); font-weight: 400; text-shadow: var(--text-shadow); }
+        .main-name { font-size: clamp(0.95rem, 10cqw, 1.8rem); font-weight: 800; margin: 0; color: var(--text-main); }
+        .pro-label { color: var(--gold); font-size: clamp(1.1rem, 12cqw, 2rem); font-weight: 900; line-height: 1; margin: 0 0 2px 0; text-transform: uppercase; text-shadow: var(--text-shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+        .smurf-tag { font-size: clamp(0.75rem, 8cqw, 1.2rem); color: var(--text-muted); font-weight: 400; text-shadow: var(--text-shadow); }
         
         .truncate-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
         .ladder-rank { color: var(--gold); font-weight: 900; margin: 0 6px; font-size: 0.95em; flex-shrink: 0; }
 
-        .mantra-text { font-size: clamp(0.7rem, 9cqw, 1.3rem); color: var(--gold); font-family: 'Helvetica Neue', Arial, sans-serif; font-style: italic; font-weight: 400; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: var(--text-shadow); width: 100%; opacity: 0.9; }
+        .mantra-text { font-size: clamp(0.8rem, 9cqw, 1.3rem); color: var(--gold); font-family: 'Helvetica Neue', Arial, sans-serif; font-style: italic; font-weight: 400; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: var(--text-shadow); width: 100%; opacity: 0.9; }
         
         /* Mastery Column */
         .mastery-group { display: flex; flex-direction: column; justify-content: center; align-items: center; flex: 0.8; padding: 0 1vw; border-left: 1px solid var(--border); }
         .enemy-card .mastery-group { border-right: 1px solid var(--border); border-left: none; }
-        .mastery-label { font-size: clamp(0.55rem, 0.65vw, 0.85rem); color: var(--text-muted); font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; text-transform: uppercase; text-align: center; }
-        .mastery-score { font-size: clamp(1rem, 1.4vw, 2rem); font-weight: 900; color: var(--text-main); text-shadow: var(--text-shadow); } 
+        .mastery-label { font-size: clamp(0.6rem, 0.75vw, 0.85rem); color: var(--text-muted); font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; text-transform: uppercase; text-align: center; }
+        .mastery-score { font-size: clamp(1.1rem, 1.5vw, 2rem); font-weight: 900; color: var(--text-main); text-shadow: var(--text-shadow); } 
 
         /* Stats Column */
         .stats-group { display: flex; flex-direction: column; justify-content: center; padding: 0 1vw; border-left: 1px solid var(--border); border-right: 1px solid var(--border); flex: 1; min-width: 0; }
         .enemy-card .stats-group { border-right: none; border-left: 1px solid var(--border); text-align: left; }
-        .stat-line { font-size: clamp(0.8rem, 1vw, 1.3rem); color: var(--text-muted); margin: 3px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-line { font-size: clamp(0.85rem, 1.1vw, 1.3rem); color: var(--text-muted); margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stat-highlight { color: var(--text-main); font-weight: 700; }
         .stat-winrate { color: var(--green); font-weight: 800; }
         .stat-winrate-negative { color: var(--red); font-weight: 800; }
@@ -252,9 +265,9 @@
         
         /* Glass-Style Tags */
         .badge { 
-            padding: clamp(2px, 0.2vw, 4px) clamp(4px, 0.4vw, 8px); border-radius: 4px; 
-            font-size: clamp(0.55rem, 0.65vw, 0.9rem); font-weight: 800; text-transform: uppercase; 
-            width: fit-content; white-space: nowrap; 
+            padding: clamp(3px, 0.3vh, 4px) clamp(6px, 0.6vw, 10px); border-radius: 4px; 
+            font-size: clamp(0.65rem, 0.9vh, 0.9rem); font-weight: 800; text-transform: uppercase; 
+            width: fit-content; white-space: nowrap; display: inline-block;
         }
         .badge-positive { background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); }
         .badge-negative { background: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.3); }
@@ -318,6 +331,21 @@
         .item-slot { width: 24px; height: 24px; background: var(--item-bg); border: 1px solid var(--border); border-radius: 3px; }
         .item-slot img { width: 100%; height: 100%; border-radius: 2px; object-fit: cover; }
 
+        /* --- LEGAL FOOTER --- */
+        .legal-footer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            padding: 10px 20px;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            background: rgba(36, 36, 36, 0.9); /* Slightly transparent to not block arena strictly */
+            border-top: 1px solid var(--border);
+            z-index: 100;
+            box-sizing: border-box;
+        }
+
     </style>
 </head>
 <body>
@@ -350,7 +378,7 @@
         </button>
 
         <a href="https://discord.gg/yourdiscordlink" target="_blank" class="discord-btn">
-            Want your custom player card? Head to our discord!
+            Get your custom card!
         </a>
     </div>
 </header>
@@ -369,6 +397,10 @@
 </div>
 
 <div class="bottom-zone"></div>
+
+<footer class="legal-footer">
+    Pro Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.
+</footer>
 
 <div id="history-panel" class="history-panel">
     <div id="sidebar-bg-container"></div>
@@ -502,7 +534,7 @@
             <div class="row-content">
                 <div class="identity-group"></div> 
                 
-                <div class="mastery-group tooltip-box" data-tooltip="Combined True Mastery of the entire team">
+                <div class="mastery-group">
                     <div class="mastery-label" style="color: var(--gold);">TEAM MASTERY</div>
                     <div class="mastery-score">${formatMastery(totalMastery)}</div>
                 </div>
