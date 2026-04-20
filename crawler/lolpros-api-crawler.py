@@ -1,10 +1,9 @@
 import os
-import time
 import requests
+import time
 import psycopg2
-import re
-from mwrogue.esports_client import EsportsClient
-from mwrogue.auth_credentials import AuthCredentials
+import urllib.parse
+from bs4 import BeautifulSoup
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -13,13 +12,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env_path = BASE_DIR / '.env'
 load_dotenv(dotenv_path=env_path, override=True)
 
-PRO_IMAGE_DIR = "public/images/pros"
-TEAM_IMAGE_DIR = "public/images/teams"
-os.makedirs(PRO_IMAGE_DIR, exist_ok=True)
-os.makedirs(TEAM_IMAGE_DIR, exist_ok=True)
+API_KEY = os.getenv("RIOT_API_KEY")
+RIOT_HEADERS = {"X-Riot-Token": API_KEY}
+SCRAPER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9" 
+}
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+VALID_ROLES = {
+    "Top", "Jungle", "Jungler", "Mid", "Bot", "ADC", "AD Carry", "Support", 
+    "Coach", "Head Coach", "Assistant Coach", "Manager", "Sub", "Substitute"
+}
+
+VALID_COUNTRIES = {
+    "France", "Germany", "Spain", "Poland", "Denmark", "Sweden", "United Kingdom", "UK", "Great Britain", "England", "Scotland", "Wales",
+    "Italy", "Netherlands", "Norway", "Belgium", "Portugal", "Romania", "Greece", "Czech Republic", "Czechia", "Hungary", 
+    "Austria", "Switzerland", "Bulgaria", "Serbia", "Croatia", "Finland", "Ireland", "Slovakia", "Lithuania", "Slovenia", 
+    "Latvia", "Estonia", "Cyprus", "Luxembourg", "Malta", "Iceland", "Russia", "Ukraine", "Belarus", "Bosnia and Herzegovina", 
+    "Turkey", "Türkiye", "Lebanon", "Egypt", "Morocco", "South Korea", "Korea", "Republic of Korea", "China", "Japan", 
+    "Taiwan", "Vietnam", "USA", "United States", "Canada", "Brazil", "Australia"
 }
 
 def get_db_connection():
@@ -29,176 +40,124 @@ def get_db_connection():
         password=os.getenv("DB_PASSWORD")
     )
 
-def extract_image_priority(filename):
-    if not filename: return 0
-    year_match = re.search(r'(20\d{2})', filename)
-    year = int(year_match.group(1)) if year_match else 0
-    score = year * 10
-    fn_lower = filename.lower()
-    if 'split 2' in fn_lower: score += 4
-    elif 'summer' in fn_lower: score += 3
-    elif 'split 1' in fn_lower: score += 2
-    elif 'spring' in fn_lower: score += 1
-    return score
-
-def get_fandom_url(site, filename):
-    if not filename: return None
+def fetch_player_details(slug):
+    url = f"https://lolpros.gg/player/{slug}"
+    details = {"accounts": [], "socials": {"twitch": None, "twitter": None, "youtube": None}, "roles": [], "nationalities": []}
+    
     try:
-        time.sleep(1.2) 
-        response = site.client.api(action="query", format="json", titles=f"File:{filename}", prop="imageinfo", iiprop="url")
-        pages = response.get("query", {}).get("pages", {})
-        for pg in pages.values():
-            if "imageinfo" in pg: return pg["imageinfo"][0]["url"]
-    except Exception: return None
-    return None
+        response = requests.get(url, headers=SCRAPER_HEADERS, timeout=15)
+        if response.status_code != 200: return details
+        soup = BeautifulSoup(response.text, 'html.parser')
+        first_seen_account = None
 
-def download_file(site, filename, target_folder, prefix=""):
-    if not filename: return None
-    url = get_fandom_url(site, filename)
-    if not url: return None
+        for el in soup.find_all(['p', 'span', 'div']):
+            text = el.get_text(strip=True)
+            if not text: continue
 
-    ext = filename.split('.')[-1] if '.' in filename else 'png'
-    local_filename = f"{prefix.replace(' ', '_').lower()}.{ext}"
-    filepath = os.path.join(target_folder, local_filename)
-    
-    if os.path.exists(filepath):
-        return f"/{target_folder.split('public/')[1]}/{local_filename}"
-        
-    time.sleep(2.0) 
-    try:
-        res = requests.get(url, stream=True, headers=HEADERS, timeout=10)
-        if res.status_code == 200:
-            with open(filepath, 'wb') as f:
-                for chunk in res.iter_content(1024): f.write(chunk)
-            print(f"      [✓] Saved: {local_filename}")
-            return f"/{target_folder.split('public/')[1]}/{local_filename}"
-    except Exception: pass
-    return None
+            if text in VALID_ROLES:
+                norm_role = "Bot" if text in ["ADC", "AD Carry"] else "Jungle" if text == "Jungler" else text
+                if norm_role not in details["roles"]: details["roles"].append(norm_role)
+                
+            elif text in VALID_COUNTRIES:
+                norm_nat = text
+                if text in ["UK", "Great Britain", "England", "Scotland", "Wales"]: norm_nat = "United Kingdom"
+                elif text == "Türkiye": norm_nat = "Turkey"
+                elif text in ["Korea", "Republic of Korea"]: norm_nat = "South Korea"
+                if norm_nat not in details["nationalities"]: details["nationalities"].append(norm_nat)
 
-def fetch_and_upsert_fandom_pros():
-    print("DEBUG: Syncing Players with Tie-Breaker Collision Protection...")
-    credentials = AuthCredentials(username=os.getenv("FANDOM_USERNAME"), password=os.getenv("FANDOM_PASSWORD"))
-    site = EsportsClient('lol', credentials=credentials)
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    offset = 0 
-    limit = 500
-    
+            if '#' in text and len(text.split('#')) == 2:
+                name, tag = text.split('#')
+                if 2 <= len(name.strip()) <= 16 and 2 <= len(tag.strip()) <= 5:
+                    current_acc = {"game_name": name.strip(), "tag_line": tag.strip()}
+                    if first_seen_account is None: first_seen_account = current_acc
+                    parent_box = el.find_parent('div')
+                    if parent_box and parent_box.find('img'):
+                        if not any(acc['game_name'] == current_acc['game_name'] and acc['tag_line'] == current_acc['tag_line'] for acc in details["accounts"]):
+                            details["accounts"].append(current_acc)
+
+        if not details["accounts"] and first_seen_account: details["accounts"].append(first_seen_account)
+
+        for link in soup.find_all('a', href=True):
+            href = link['href']
+            if "twitch.tv" in href and not details["socials"]['twitch']: details["socials"]['twitch'] = href if href.startswith('http') else f"https:{href}"
+            elif ("twitter.com" in href or "x.com" in href) and not details["socials"]['twitter']: details["socials"]['twitter'] = href if href.startswith('http') else f"https:{href}"
+            elif ("youtube.com" in href or "youtu.be" in href) and not details["socials"]['youtube']: details["socials"]['youtube'] = href if href.startswith('http') else f"https:{href}"
+
+        details["role_str"] = ", ".join(details["roles"]) if details["roles"] else None
+        details["nat_str"] = ", ".join(details["nationalities"]) if details["nationalities"] else None
+        return details
+    except Exception as e:
+        print(f"   [!] Error parsing {slug}: {e}"); return details
+
+def sync_everything(start_page=1):
+    print(f"DEBUG: Starting Global Sync at Page {start_page}...")
+    conn = get_db_connection(); cursor = conn.cursor()
+    page = start_page
+
     while True:
-        print(f"\n--- Fetching Batch Metadata (Offset: {offset}) ---")
-        try:
-            cargo_results = site.cargo_client.query(
-                tables="Players",
-                fields="ID, Country, Birthdate, Role, Team, Twitter, Youtube, IsPersonality, IsSubstitute, IsTrainee, IsRetired",
-                order_by="ID", limit=limit, offset=offset
-            )
-        except Exception as e:
-            print(f"   [!] Cargo Batch Error. Sleeping 5m..."); time.sleep(300); continue
+        ladder_url = f"https://api.lolpros.gg/es/ladder?page={page}&page_size=100&sort=rank&order=desc"
+        print(f"\n--- SCRAPING LADDER PAGE {page} ---")
+        res = requests.get(ladder_url, headers=SCRAPER_HEADERS)
+        if res.status_code != 200: break
+        pros_on_page = res.json()
+        if not pros_on_page: break
 
-        if not cargo_results: break
+        for p_meta in pros_on_page:
+            slug = p_meta.get('slug', '').lower() 
+            pro_name = p_meta.get('name')
+            if not slug: continue
 
-        for item in cargo_results:
-            f_id = item.get("ID")
-            f_role = item.get("Role")
-            f_country = item.get("Country")
-            
-            if not f_id: continue
-            
-            slugified = f_id.lower().replace(" ", "-")
-            
-            # --- TIE-BREAKER LOGIC ---
-            # Finds ALL players with the matching name.
-            # If a duplicate exists, it scores them (+1 for matching role, +1 for matching country).
-            # It sorts by the highest score and picks the top 1.
+            time.sleep(1.0)
+            details = fetch_player_details(slug)
+            print(f"\n[PRO: {pro_name} | Roles: {details['role_str']} | Nat: {details['nat_str']}]")
+
             cursor.execute("""
-                SELECT player_id FROM players 
-                WHERE (name = %s OR known_name ILIKE %s)
-                ORDER BY 
-                    (CASE WHEN role ILIKE %s THEN 1 ELSE 0 END) + 
-                    (CASE WHEN nationality ILIKE %s THEN 1 ELSE 0 END) DESC
-                LIMIT 1
-            """, (
-                slugified, 
-                f_id, 
-                f"%{f_role}%" if f_role else "IMPOSSIBLE_MATCH", 
-                f"%{f_country}%" if f_country else "IMPOSSIBLE_MATCH"
-            ))
+                INSERT INTO players (name, known_name, role, nationality, twitch_url, twitter_url, youtube_url, is_creator) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
+                ON CONFLICT (name) DO UPDATE SET 
+                    known_name = COALESCE(players.known_name, EXCLUDED.known_name),
+                    role = EXCLUDED.role, nationality = EXCLUDED.nationality,
+                    twitch_url = COALESCE(EXCLUDED.twitch_url, players.twitch_url),
+                    twitter_url = COALESCE(EXCLUDED.twitter_url, players.twitter_url),
+                    youtube_url = COALESCE(EXCLUDED.youtube_url, players.youtube_url),
+                    is_creator = TRUE
+                RETURNING player_id;
+            """, (slug, pro_name, details['role_str'], details['nat_str'], details['socials']['twitch'], details['socials']['twitter'], details['socials']['youtube']))
+            player_id = cursor.fetchone()[0]
+
+            for acc in details['accounts']:
+                riot_id = f"{acc['game_name']}#{acc['tag_line']}"
+                
+                # Check if account exists
+                cursor.execute("SELECT 1 FROM accounts WHERE riot_id = %s", (riot_id,))
+                if cursor.fetchone():
+                    print(f"   -> [SKIPPED] {riot_id} (Already in DB)")
+                    continue
+
+                time.sleep(1.2)
+                safe_name, safe_tag = urllib.parse.quote(acc['game_name']), urllib.parse.quote(acc['tag_line'])
+                riot_res = requests.get(f"https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{safe_name}/{safe_tag}", headers=RIOT_HEADERS)
+                
+                if riot_res.status_code == 200:
+                    puuid = riot_res.json()['puuid']
+                    cursor.execute("INSERT INTO accounts (puuid, player_id, riot_id) VALUES (%s, %s, %s) ON CONFLICT (puuid) DO UPDATE SET riot_id = EXCLUDED.riot_id;", (puuid, player_id, riot_id))
+                    print(f"   -> [ADDED] {riot_id}")
+                elif riot_res.status_code == 429:
+                    print("   -> [WARNING] Rate limited. Sleeping 30s..."); time.sleep(30)
             
-            match = cursor.fetchone()
-
-            if match:
-                p_id = match[0]
-                print(f" [+] Processing '{f_id}'")
-                
-                # 1. Sequential Image Metadata Query
-                portrait_local = None
-                try:
-                    time.sleep(2.5) 
-                    img_query = site.cargo_client.query(
-                        tables="PlayerImages",
-                        fields="FileName",
-                        where=f"Link = '{f_id}'"
-                    )
-                    if img_query:
-                        latest_img_name = max(img_query, key=lambda x: extract_image_priority(x.get("FileName")))
-                        portrait_local = download_file(site, latest_img_name, PRO_IMAGE_DIR, f_id)
-                except Exception as e:
-                    if "ratelimited" in str(e).lower():
-                        print("      [!] Rate limited during image query. Sleeping 60s...")
-                        time.sleep(60)
-                    else:
-                        print(f"      [!] Error fetching image metadata: {e}")
-
-                # 2. Team Logo
-                team_name = item.get("Team")
-                team_logo_local = None
-                if team_name:
-                    team_logo_local = download_file(site, f"{team_name}logo square.png", TEAM_IMAGE_DIR, team_name)
-
-                # 3. Data Processing
-                def format_social(val, base_url):
-                    if not val: return None
-                    return val if val.startswith("http") else f"{base_url}{val.replace('@', '')}"
-
-                f_twitter = format_social(item.get("Twitter"), "https://twitter.com/")
-                f_youtube = format_social(item.get("Youtube"), "https://youtube.com/")
-                f_leaguepedia = f"https://lol.fandom.com/wiki/{f_id.replace(' ', '_')}"
-
-                # 4. SQL Update
-                try:
-                    def to_bool(val): return str(val) == '1'
-                    f_birth = item.get("Birthdate")
-                    cursor.execute("""
-                        UPDATE players SET 
-                            known_name = COALESCE(players.known_name, %s),
-                            nationality = COALESCE(players.nationality, %s),
-                            role = COALESCE(players.role, %s), 
-                            team = %s, birthday = %s,
-                            profile_image_url = %s, team_logo_url = %s,
-                            twitter_url = COALESCE(players.twitter_url, %s),
-                            youtube_url = COALESCE(players.youtube_url, %s),
-                            leaguepedia_url = %s, is_pro = TRUE,
-                            is_personality = %s, is_substitute = %s, is_trainee = %s, is_retired = %s
-                        WHERE player_id = %s;
-                    """, (f_id, f_country, f_role, team_name, 
-                          f_birth if f_birth and len(f_birth) > 5 else None,
-                          portrait_local, team_logo_local, f_twitter, f_youtube, f_leaguepedia,
-                          to_bool(item.get("IsPersonality")), to_bool(item.get("IsSubstitute")),
-                          to_bool(item.get("IsTrainee")), to_bool(item.get("IsRetired")), p_id))
-                    print(f"      [✓] DB Updated")
-                except Exception as sql_err:
-                    print(f"      [!] SQL Error: {sql_err}")
-                
-                time.sleep(3.0)
-
-        conn.commit()
-        offset += limit
-        print("  -> Batch committed. 60s breather...")
-        time.sleep(60) 
-        
+            conn.commit()
+        page += 1 
     cursor.close(); conn.close()
 
+# --- INTERACTIVE PROMPT SETUP ---
 if __name__ == "__main__":
-    fetch_and_upsert_fandom_pros()
+    print("\n=== LOLPROS LADDER SCRAPER ===")
+    user_input = input("Enter the starting page number (or press Enter to start from page 1): ")
+    
+    try:
+        start_page = int(user_input) if user_input.strip() else 1
+    except ValueError:
+        print("Invalid input detected. Defaulting to page 1.")
+        start_page = 1
+
+    sync_everything(start_page=start_page)
