@@ -24,8 +24,7 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .search-area { width: clamp(180px, 15vw, 250px); position: relative; }
 .search-container { position: relative; background: var(--search-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 15px; display: flex; align-items: center; transition: 0.3s; }
 .search-container input { background: none; border: none; width: 100%; color: var(--text-main); font-size: 1.1rem; outline: none; }
-.search-icon { position: absolute; right: 15px; opacity: 0.3; font-size: 1.1rem; pointer-events: auto; transition: opacity 0.2s; cursor: pointer; }
-.search-icon:hover { opacity: 0.8; }
+.search-icon { position: absolute; right: 15px; opacity: 0.3; font-size: 1.1rem; pointer-events: none; }
 .scan-loader { display: none; position: absolute; right: 15px; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -41,6 +40,7 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .arena { position: relative; display: grid; width: 100%; max-width: 95vw; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: flex-start; gap: clamp(4vw, 8vw, 10vw); padding: 0 20px; box-sizing: border-box; flex: none; }
 .team-box { display: flex; flex-direction: column; gap: clamp(6px, 1.5vh, 25px); z-index: 5; min-width: 0; }
 
+/* --- CARD BASE --- */
 .card { position: relative; height: clamp(70px, 11vh, 170px); background: var(--card); border-radius: 6px; border: 1px solid var(--border); box-shadow: var(--shadow-card); cursor: pointer; transition: 0.2s; opacity: 0; overflow: visible; width: 100%; }
 .card:hover { background: var(--card-hover); transform: translateY(-2px); box-shadow: 0 6px 20px var(--shadow); z-index: 50; }
 .card.unclickable { cursor: default; }
@@ -52,7 +52,7 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .card-bg-wrapper { position: absolute; inset: 0; overflow: hidden; border-radius: 5px; z-index: 1; }
-.champ-splash { position: absolute; left: 0; top: 0; bottom: 0; width: 25%; background-size: 150%; background-position: center 20%; opacity: var(--splash-opacity, 0.5); z-index: 0; -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
+.champ-splash { position: absolute; left: 0; top: 0; bottom: 0; width: 25%; background-size: 150%; background-position: center 20%; opacity: var(--splash-opacity); z-index: 0; -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
 .enemy-card .champ-splash { left: auto; right: 0; background-position: 30% 20%; -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
 .ally-card .champ-splash { background-position: 70% 20%; }
 .streamer-splash { filter: grayscale(100%) opacity(0.3); }
@@ -73,47 +73,61 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .truncate-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 100%; }
 .mantra-text { font-size: 0.8rem; color: var(--gold); font-style: italic; opacity: 0.9; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* --- UPDATED RANK ICON --- */
-/* --- OVERRIDE RIOT'S PNG PADDING --- */
-/* --- OVERRIDE RIOT'S INSANE PNG PADDING --- */
-.rank-icon { 
-    /* 1. Shrink the invisible box to pull the text right up next to it */
-    width: 16px;  
-    height: 16px; 
-    
-    /* 2. Adjust vertical alignment */
-    vertical-align: middle; 
-    margin-top: -3px; 
-    
-    /* 3. Shift the structural box left/right to position perfectly */
-    margin-left: 8px; 
-    margin-right: 18px; 
-    
-    /* 4. Visually blow up the image by 350% (ignoring the structural box entirely) */
-    transform: scale(3.5); 
-    
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)); 
-}
-
 .identity-group-pro { display: flex; flex-direction: column; justify-content: center; width: 100%;}
 .enemy-card .identity-group-pro { align-items: flex-end; }
 .pro-name-gold { color: var(--gold); font-size: 1.4rem; font-weight: 900; line-height: 1; text-transform: uppercase; text-shadow: var(--text-shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 .riot-id-subtext { font-size: 0.8rem; opacity: 0.6; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 
-.effect-the-dev { border: 1px solid var(--gold) !important; box-shadow: 0 0 15px rgba(241, 196, 15, 0.4), inset 0 0 20px rgba(241, 196, 15, 0.1) !important; animation: devGlow 3s infinite alternate; }
-@keyframes devGlow { 0% { box-shadow: 0 0 15px rgba(241, 196, 15, 0.3), inset 0 0 10px rgba(241, 196, 15, 0.1); } 100% { box-shadow: 0 0 25px rgba(241, 196, 15, 0.8), inset 0 0 30px rgba(241, 196, 15, 0.3); border-color: #fff; } }
+.effect-the-dev {
+    border: 1px solid var(--gold) !important;
+    box-shadow: 0 0 15px rgba(241, 196, 15, 0.4), inset 0 0 20px rgba(241, 196, 15, 0.1) !important;
+    animation: devGlow 3s infinite alternate;
+}
 
-.mastery-group { display: flex; flex-direction: column; justify-content: center; align-items: center; flex: 0.8; padding: 0 1vw; border-left: 1px solid var(--border); }
+@keyframes devGlow {
+    0% { box-shadow: 0 0 15px rgba(241, 196, 15, 0.3), inset 0 0 10px rgba(241, 196, 15, 0.1); }
+    100% { box-shadow: 0 0 25px rgba(241, 196, 15, 0.8), inset 0 0 30px rgba(241, 196, 15, 0.3); border-color: #fff; }
+}
+
+/* --- TRUE MASTERY COLUMN (EMBROIDERED FLAIR BACKGROUND) --- */
+.mastery-group { 
+    position: relative; /* Setup for absolute background layer */
+    display: flex; flex-direction: column; justify-content: center; align-items: center; 
+    flex: 0.8; padding: 0 1vw; border-left: 1px solid var(--border); 
+    z-index: 1; /* Establishes a stacking context so the image stays trapped behind the text */
+}
 .enemy-card .mastery-group { border-right: 1px solid var(--border); border-left: none; }
-.mastery-label { font-size: clamp(0.6rem, 0.75vw, 0.85rem); color: var(--text-muted); font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; text-transform: uppercase; text-align: center; }
-.mastery-score { font-size: clamp(1.1rem, 1.5vw, 2rem); font-weight: 900; color: var(--text-main); text-shadow: var(--text-shadow); } 
 
+/* The subtly injected watermark background */
+.mastery-group::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(2); /* Fluidly scales it 100% bigger */
+    width: 100%; height: 100%;
+    background-image: url('http://localhost:8000/images/miscellaneous/mastery_flair.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    
+    /* Strips RGB to make it pure black, giving it a dark, indented "etched" look over the banner */
+    filter: brightness(0); 
+    opacity: 0.15; 
+    
+    z-index: -1; /* Pushes it firmly behind the text */
+    pointer-events: none;
+}
+
+/* Ensure the text floats above the background watermark */
+.mastery-label { position: relative; z-index: 1; font-size: clamp(0.6rem, 0.75vw, 0.85rem); color: var(--text-muted); font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; text-transform: uppercase; text-align: center; }
+.mastery-score { position: relative; z-index: 1; font-size: clamp(1.1rem, 1.5vw, 2rem); font-weight: 900; color: var(--text-main); text-shadow: var(--text-shadow); } 
+
+/* --- STATS COLUMN (SMALLER TEXT, BIGGER ICONS) --- */
 .stats-group { display: flex; flex-direction: column; justify-content: center; padding: 0 1vw; border-left: 1px solid var(--border); border-right: 1px solid var(--border); flex: 1; min-width: 0; }
 .enemy-card .stats-group { border-right: none; border-left: 1px solid var(--border); text-align: left; }
-
-/* --- UPDATED STAT-LINE --- */
-.stat-line { font-size: clamp(0.7rem, 0.9vw, 1rem); color: var(--text-muted); margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-line { font-size: clamp(0.7rem, 0.9vw, 1.05rem); color: var(--text-muted); margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-highlight { color: var(--text-main); font-weight: 700; }
+.rank-icon { width: 30px; height: 30px; vertical-align: middle; margin-right: 6px; margin-top: -2px; object-fit: contain;} /* VASTLY INCREASED SIZE */
 
 .tags-group { display: flex; flex-direction: row; flex-wrap: wrap; align-content: center; gap: 6px; flex: 0.8; min-width: 0; padding: 0 1vw; }
 .enemy-card .tags-group { justify-content: flex-end; }
@@ -122,59 +136,76 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .badge-positive { background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); }
 .badge-negative { background: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.3); }
 .badge-neutral { background: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.3); }
-.badge-pro { background: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.4); box-shadow: 0 0 8px rgba(241, 196, 15, 0.1); margin: 0; }
+.badge-pro { background: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.4); box-shadow: 0 0 8px rgba(241, 196, 15, 0.1); }
 .badge-special { background: linear-gradient(135deg, rgba(142, 68, 173, 0.8), rgba(41, 128, 185, 0.8)); color: white; border: 1px solid #9b59b6; box-shadow: 0 0 8px rgba(155, 89, 182, 0.3); }
-
-/* --- CONTENT CREATOR BADGE --- */
-.badge-creator { background: rgba(236, 72, 153, 0.15); color: #ec4899; border: 1px solid rgba(236, 72, 153, 0.4); box-shadow: 0 0 8px rgba(236, 72, 153, 0.1); margin: 0; }
 
 .tooltip-box { position: relative; cursor: help; }
 .tooltip-box:hover::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background: var(--tooltip-bg); color: var(--text-main); padding: 6px 12px; border-radius: 4px; font-size: 0.75rem; width: max-content; max-width: 250px; text-align: center; border: 1px solid var(--border); z-index: 100; white-space: normal; line-height: 1.4; font-family: 'Roboto', sans-serif; box-shadow: 0 4px 15px var(--shadow); pointer-events: none; }
 .top-header .tooltip-box:hover::after { bottom: auto; top: 125%; }
 
 /* --- FLUID SIDEBAR --- */
-.history-panel { box-sizing: border-box; position: fixed; right: -750px; top: 0; width: 23vw; min-width: 400px; max-width: 560px; height: 100vh; background: var(--panel-bg); border-left: 2px solid var(--border); transition: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 200; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px;}
+.history-panel { box-sizing: border-box; position: fixed; right: -750px; top: 0; width: 20vw; min-width: 350px; max-width: 500px; height: 100vh; background: var(--panel-bg); border-left: 2px solid var(--border); transition: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 200; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px;}
 .history-panel.active { right: 0; box-shadow: -10px 0 30px var(--shadow); }
-.sidebar-content { position: relative; z-index: 10; padding: 30px; }
-.close-btn { cursor: pointer; color: var(--red); font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 30px; display: inline-block; font-weight: bold; position: relative; z-index: 50; }
+.sidebar-content { position: relative; z-index: 10; padding: 0 20px 20px 20px; }
+.close-btn { cursor: pointer; color: var(--red); font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; margin: 20px 0; display: inline-block; font-weight: bold; position: relative; z-index: 50;}
 
-/* --- UNIVERSAL SIDEBAR HEADERS --- */
-.panel-section-header { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin: 25px 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+/* --- SIDEBAR HERO IMAGE --- */
+.panel-pro-img { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 45vh; 
+    object-fit: cover; 
+    object-position: center top;
+    z-index: 0;
+    opacity: 0.45;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+}
 
-/* --- CINEMATIC HERO SIDEBAR --- */
-.hero-container { position: relative; height: 25vh; min-height: 220px; margin: -60px -30px 20px -30px; overflow: hidden; background: #000; border-bottom: 1px solid var(--border); box-shadow: var(--shadow-card); }
-.hero-bg { position: absolute; inset: 0; background-size: cover; background-position: top center; filter: grayscale(100%) blur(6px); opacity: 0.35; transform: scale(1.1); transition: transform 0.5s ease, opacity 0.5s ease; }
-.history-panel:hover .hero-bg { transform: scale(1.05); opacity: 0.45; }
-.hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(30, 30, 34, 0.8) 60%, var(--panel-bg) 100%); z-index: 2; }
-.hero-content { position: relative; z-index: 10; height: 100%; padding: 25px 25px 20px 25px; display: flex; flex-direction: column; justify-content: flex-end; }
+.sidebar-hero-content {
+    position: relative;
+    z-index: 10;
+    padding-top: 20vh;
+    transition: padding-top 0.3s ease;
+}
 
-/* DYNAMIC NO-IMAGE STATE */
-.hero-container.no-image { height: auto; min-height: auto; background: transparent; border-bottom: none; box-shadow: none; margin: 10px 0 0 0; }
-.hero-container.no-image .hero-content { padding: 0; }
-.hero-container.no-image .hero-name { text-shadow: none; }
+.sidebar-hero-content.no-image {
+    padding-top: 0;
+}
 
-.hero-top-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%;}
-.hero-name { font-size: 2.6rem; font-weight: 900; margin: 0; text-transform: uppercase; line-height: 1; text-shadow: var(--text-shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
-.hero-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; font-weight: bold; text-transform: uppercase; }
-.hero-logo { width: 65px; height: 65px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)); flex-shrink: 0; margin-left: 10px;}
+.panel-bio-details {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+}
 
-/* ACCOUNTS SECTION */
-.hero-accounts { display: flex; gap: 6px; flex-wrap: wrap; }
-.hero-account-badge { background: var(--search-bg); border: 1px solid var(--border); padding: 5px 12px; border-radius: 4px; font-size: 0.75rem; font-family: monospace; font-weight: bold; color: var(--text-main); box-shadow: var(--shadow-card); white-space: nowrap; }
+.team-icon-img { height: 16px; width: auto; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+.role-icon-img { height: 26px; width: auto; vertical-align: middle; }
+.flag-text { font-size: 1.6rem; vertical-align: middle; line-height: 1; }
 
-/* SOCIAL BUTTONS (ICON GRID) */
-.panel-socials { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 0; margin-bottom: 25px; }
-.panel-social-link { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--search-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); text-decoration: none; transition: 0.2s; box-shadow: var(--shadow-card); }
-.panel-social-link:hover { background: var(--card-hover); transform: translateY(-2px); }
-.panel-social-link.twitch:hover { border-color: #9146FF; color: #9146FF; }
-.panel-social-link.twitter:hover { border-color: #1DA1F2; color: #1DA1F2; }
-.panel-social-link.youtube:hover { border-color: #FF0000; color: #FF0000; }
-.panel-social-link.wiki:hover { border-color: var(--gold); color: var(--gold); }
+/* SOCIAL BUTTONS */
+.panel-social-icon { display: inline-flex; align-items: center; justify-content: center; }
+.social-icon-img { 
+    height: 26px; 
+    width: 26px; 
+    object-fit: contain; 
+    opacity: 1; 
+    transition: all 0.2s ease-in-out; 
+}
+.panel-social-icon:hover .social-icon-img { 
+    transform: scale(1.15); 
+}
 
 /* --- RECENT GAMES & EXPANDABLE MATCHES --- */
-.match-card { background: var(--card); padding: 15px; margin-bottom: 12px; border-radius: 6px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border); border-left-width: 4px; cursor: pointer; transition: 0.2s;}
+.recent-games-header { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin: 25px 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+.match-card { background: var(--card); padding: 15px; margin-bottom: 12px; border-radius: 6px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; border: 1px solid var(--border); border-left-width: 4px; cursor: pointer; transition: 0.2s;}
 .match-card:hover { background: var(--card-hover); border-color: var(--text-muted); }
-.match-row-main { display: flex; gap: 15px; align-items: center; width: 100%; justify-content: space-between; }
 
 .match-champs { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .match-champ-icon { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--border); }
@@ -201,3 +232,75 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 
 .legal-footer { position: absolute; bottom: 0; width: 100%; text-align: center; padding: 10px 20px; font-size: 0.6rem; color: var(--text-muted); background: rgba(36, 36, 36, 0.9); border-top: 1px solid var(--border); z-index: 100; box-sizing: border-box; }
 .loader-ring { display: inline-block; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.1); border-radius: 50%; border-top-color: var(--blue); animation: spin 1s ease-in-out infinite; margin-top: 20px; }
+
+/* --- CLICKABLE TEAM NAME --- */
+.clickable-team { cursor: pointer; transition: 0.2s; padding: 4px 8px; border-radius: 4px; margin-left: -8px; }
+.clickable-team:hover { background: rgba(255, 255, 255, 0.05); color: var(--gold) !important; }
+
+/* --- TEAM ROSTER PANEL --- */
+.team-roster-panel {
+    position: fixed;
+    right: calc(20vw + 15px); /* Positions it perfectly left of the 20vw sidebar */
+    top: 90px;
+    width: 320px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    z-index: 250;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateX(20px);
+    transition: all 0.3s ease;
+}
+
+.team-roster-panel.active {
+    display: flex;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.roster-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: var(--search-bg);
+    border-bottom: 1px solid var(--border);
+    font-weight: 900;
+    color: var(--text-main);
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.close-roster-btn { cursor: pointer; color: var(--text-muted); font-size: 1rem; transition: 0.2s; }
+.close-roster-btn:hover { color: var(--red); transform: scale(1.2); }
+
+.roster-content {
+    padding: 15px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.roster-player-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--card);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    transition: 0.2s;
+}
+
+.roster-player-card:hover { border-color: var(--gold); }
+.roster-player-img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #111; border: 1px solid var(--border); }
+.roster-player-info { display: flex; flex-direction: column; gap: 2px; }
+.roster-player-name { font-weight: 800; font-size: 1rem; color: var(--text-main); }
+.roster-player-role { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; }
