@@ -270,3 +270,49 @@ def get_match_timeline(match_id: str, puuid: str):
                         skills.append(event['skillSlot'])
         return {"purchases": purchases, "skills": skills}
     except Exception: return {"purchases": [], "skills": []}
+
+@app.get("/api/team/{team_name}")
+def get_team_roster(team_name: str):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Fetches players and orders them by standard League role order
+        cursor.execute("""
+            SELECT known_name, name, role, profile_image_url, nationality
+            FROM players 
+            WHERE team = %s
+            ORDER BY 
+                CASE role 
+                    WHEN 'Top' THEN 1 
+                    WHEN 'Jungle' THEN 2 
+                    WHEN 'Mid' THEN 3 
+                    WHEN 'Bot' THEN 4 
+                    WHEN 'ADC' THEN 4
+                    WHEN 'Support' THEN 5 
+                    ELSE 6 
+                END
+        """, (team_name,))
+        
+        roster = cursor.fetchall()
+        base_url = "http://localhost:8000"
+        formatted_roster = []
+        
+        for p in roster:
+            raw_img = p.get('profile_image_url')
+            real_img = base_url + raw_img if raw_img and str(raw_img).strip().lower() != "none" and raw_img.startswith('/') else raw_img
+            
+            formatted_roster.append({
+                "name": p.get('known_name') or p.get('name'),
+                "role": p.get('role'),
+                "image": real_img,
+                "nationality": p.get('nationality')
+            })
+            
+        return {"team": team_name, "roster": formatted_roster}
+    except Exception as e:
+        print(f"Roster Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch team roster")
+    finally:
+        if conn: conn.close()   
