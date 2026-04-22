@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import requests, os, urllib.parse, psycopg2, time
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv, find_dotenv
@@ -11,6 +12,10 @@ REGION, PLATFORM = "europe", "euw1"
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# --- EXACT FOLDER MAPPING ---
+# The "../images" steps out of the backend folder to find your root images folder
+app.mount("/images", StaticFiles(directory="../images"), name="images")
 
 def get_db_connection():
     return psycopg2.connect(
@@ -58,7 +63,6 @@ def get_player(name: str, tag: str):
         acc_url = f"https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{urllib.parse.quote(name)}/{urllib.parse.quote(tag)}"
         acc_res = requests.get(acc_url, headers=HEADERS, timeout=5)
         
-        # Explicit Rate Limit check
         if acc_res.status_code == 429: raise HTTPException(status_code=429, detail="Riot API rate limit reached. Please wait 2 minutes.")
         if acc_res.status_code != 200: raise HTTPException(status_code=404, detail="Player not found")
         
@@ -67,7 +71,6 @@ def get_player(name: str, tag: str):
         spec_url = f"https://{PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{target_puuid}"
         spec_res = requests.get(spec_url, headers=HEADERS, timeout=5)
         
-        # Check rate limit on spectator too
         if spec_res.status_code == 429: raise HTTPException(status_code=429, detail="Riot API rate limit reached. Please wait 2 minutes.")
         if spec_res.status_code != 200: return {"status": "history"}
 
@@ -80,6 +83,7 @@ def get_player(name: str, tag: str):
         
         allies, enemies = [], []
         ally_m_total, enemy_m_total, ally_streaks, enemy_streaks = 0, 0, 0, 0
+        base_url = "http://localhost:8000"
 
         for p in game_data['participants']:
             puuid = p.get('puuid').strip() if p.get('puuid') else None
@@ -94,6 +98,11 @@ def get_player(name: str, tag: str):
             is_pro = False
             is_creator = False
             socials_dict = {}
+            real_img = None
+            team_logo = None
+            leaguepedia = None
+            real_name = None
+            birthday = None
 
             if not is_streamer:
                 cursor.execute("SELECT p.* FROM players p JOIN accounts a ON p.player_id = a.player_id WHERE a.puuid = %s OR a.riot_id = %s LIMIT 1", (puuid, riot_id))
@@ -116,17 +125,29 @@ def get_player(name: str, tag: str):
                     is_pro = bool(player_entry.get('is_pro'))
                     is_creator = bool(player_entry.get('is_creator')) or (len(socials_dict) > 0)
                     
-                    if not is_pro and not is_creator:
-                        is_pro = True
+                    if not is_pro and not is_creator: is_pro = True
 
-                # Pacer for the mastery loop to avoid 20 requests/1sec limit
+                    # Extract DB URLs and inject localhost to ensure cross-origin loading works
+                    raw_img = player_entry.get('profile_image_url')
+                    if raw_img and str(raw_img).strip().lower() != "none":
+                        real_img = base_url + raw_img if raw_img.startswith('/') else raw_img
+                        
+                    raw_logo = player_entry.get('team_logo_url')
+                    if raw_logo and str(raw_logo).strip().lower() != "none":
+                        team_logo = base_url + raw_logo if raw_logo.startswith('/') else raw_logo
+                        
+                    lp_url = player_entry.get('leaguepedia_url')
+                    if lp_url and str(lp_url).strip().lower() != "none":
+                        leaguepedia = lp_url
+                        
+                    real_name = player_entry.get('real_name')
+                    birthday = str(player_entry.get('birthday')) if player_entry.get('birthday') else None
+
                 time.sleep(0.1) 
                 m_res = requests.get(f"https://{PLATFORM}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/by-champion/{champ_id}", headers=HEADERS, timeout=3)
                 
-                if m_res.status_code == 429:
-                    cur_mast = 0 # Skip cleanly if rate limited
-                elif m_res.status_code == 200: 
-                    cur_mast = m_res.json().get('championPoints', 0)
+                if m_res.status_code == 429: cur_mast = 0 
+                elif m_res.status_code == 200: cur_mast = m_res.json().get('championPoints', 0)
                     
                 tot_mast = cur_mast
                 
@@ -158,6 +179,8 @@ def get_player(name: str, tag: str):
                 "role": player_entry.get('role') if player_entry else None,
                 "nationality": player_entry.get('nationality') if player_entry else None,
                 "mantra": player_entry.get('mantra') if player_entry else None,
+                "real_name": real_name, "birthday": birthday,
+                "real_img": real_img, "team_logo": team_logo, "leaguepedia": leaguepedia,
                 "socials": socials_dict, "smurfs": smurfs_list,
                 "rank": rank_data["tier"], "lp": rank_data["lp"],
                 "current_mastery": cur_mast, "total_mastery": tot_mast, 
@@ -168,8 +191,7 @@ def get_player(name: str, tag: str):
             else: enemies.append(p_payload)
 
         return {"status": "live", "allies": allies, "enemies": enemies, "ff_angle": (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0)}
-    except HTTPException:
-        raise # Let clean 404s and 429s pass through to the frontend!
+    except HTTPException: raise 
     except Exception as e: 
         print(f"CRITICAL ERROR: {e}") 
         raise HTTPException(status_code=500, detail="Internal Server Error")
@@ -189,12 +211,10 @@ def get_match_history(puuid: str, start: int = 0, count: int = 5):
         history_data = []
 
         for match_id in match_ids:
-            time.sleep(0.4) # Paced buffer to avoid bursting 100/2min
+            time.sleep(0.4) 
             detail_res = requests.get(f"https://{REGION}.api.riotgames.com/lol/match/v5/matches/{match_id}", headers=HEADERS)
             
-            if detail_res.status_code == 429:
-                raise HTTPException(status_code=429, detail="Rate limit reached while loading games.")
-            
+            if detail_res.status_code == 429: raise HTTPException(status_code=429, detail="Rate limit reached while loading games.")
             if detail_res.status_code == 200:
                 data = detail_res.json()
                 me = next((p for p in data['info']['participants'] if p['puuid'] == puuid), None)
@@ -226,8 +246,7 @@ def get_match_history(puuid: str, start: int = 0, count: int = 5):
                     }
                 })
         return history_data
-    except HTTPException:
-        raise
+    except HTTPException: raise
     except Exception as e: 
         print(f"History Error: {e}"); 
         raise HTTPException(status_code=500, detail="Failed to fetch history")
