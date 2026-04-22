@@ -55,7 +55,21 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .champ-splash { position: absolute; left: 0; top: 0; bottom: 0; width: 25%; background-size: 150%; background-position: center 20%; opacity: var(--splash-opacity); z-index: 0; -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
 .enemy-card .champ-splash { left: auto; right: 0; background-position: 30% 20%; -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
 .ally-card .champ-splash { background-position: 70% 20%; }
-.streamer-splash { filter: grayscale(100%) opacity(0.3); }
+.streamer-splash { filter: grayscale(100%) brightness(0.25) !important; }
+
+/* Streamer mode card — dashed grey outline, heavily dimmed */
+.ally-card.streamer-mode-card,
+.enemy-card.streamer-mode-card {
+    border: 1px dashed rgba(100, 100, 110, 0.35) !important;
+    border-left-width: 1px !important;
+    border-right-width: 1px !important;
+    background: rgba(22, 22, 26, 0.95) !important;
+    box-shadow: none !important;
+}
+.streamer-mode-card:hover {
+    transform: none !important;
+    background: rgba(22, 22, 26, 0.95) !important;
+}
 
 .row-content { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; width: 100%; height: 100%; box-sizing: border-box; }
 .ally-card { border-left: 5px solid var(--blue); animation: slideInLeft 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
@@ -132,12 +146,97 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .tags-group { display: flex; flex-direction: row; flex-wrap: wrap; align-content: center; gap: 6px; flex: 0.8; min-width: 0; padding: 0 1vw; }
 .enemy-card .tags-group { justify-content: flex-end; }
 
-.badge { padding: clamp(3px, 0.3vh, 4px) clamp(6px, 0.6vw, 10px); border-radius: 4px; font-size: clamp(0.65rem, 0.9vh, 0.9rem); font-weight: 800; text-transform: uppercase; width: fit-content; white-space: nowrap; display: inline-block; }
-.badge-positive { background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); }
-.badge-negative { background: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.3); }
-.badge-neutral { background: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.3); }
-.badge-pro { background: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.4); box-shadow: 0 0 8px rgba(241, 196, 15, 0.1); }
-.badge-special { background: linear-gradient(135deg, rgba(142, 68, 173, 0.8), rgba(41, 128, 185, 0.8)); color: white; border: 1px solid #9b59b6; box-shadow: 0 0 8px rgba(155, 89, 182, 0.3); }
+.badge { padding: clamp(3px, 0.3vh, 4px) clamp(6px, 0.6vw, 10px); border-radius: 4px; font-size: clamp(0.65rem, 0.9vh, 0.9rem); font-weight: 800; text-transform: uppercase; width: fit-content; white-space: nowrap; display: inline-block; position: relative; overflow: hidden; }
+
+/* Green — positive streaks */
+.badge-positive { background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.4); box-shadow: 0 0 6px rgba(46, 204, 113, 0.15); }
+
+/* Red — negative streaks */
+.badge-negative { background: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.4); }
+
+/* Neutral fallback */
+.badge-neutral { background: rgba(160, 160, 168, 0.12); color: #a0a0a8; border: 1px solid rgba(160, 160, 168, 0.25); }
+
+/* Gold — PRO (in a team) */
+.badge-pro { background: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.5); box-shadow: 0 0 10px rgba(241, 196, 15, 0.15); }
+
+/* Purple — STREAMER / CONTENT CREATOR */
+.badge-creator { background: rgba(155, 89, 182, 0.18); color: #c39bd3; border: 1px solid rgba(155, 89, 182, 0.5); box-shadow: 0 0 8px rgba(155, 89, 182, 0.15); }
+
+/* Teal-to-violet gradient + slow pulse — SECRET WEAPON */
+.badge-secret-weapon {
+    background: linear-gradient(135deg, rgba(26, 188, 156, 0.2) 0%, rgba(142, 68, 173, 0.25) 100%);
+    color: #a8e6cf;
+    border: 1px solid rgba(26, 188, 156, 0.5);
+    box-shadow: 0 0 10px rgba(26, 188, 156, 0.2);
+    animation: secretPulse 3s ease-in-out infinite;
+}
+@keyframes secretPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(26, 188, 156, 0.2); border-color: rgba(26, 188, 156, 0.5); }
+    50%       { box-shadow: 0 0 16px rgba(142, 68, 173, 0.45); border-color: rgba(142, 68, 173, 0.65); }
+}
+
+/* Red-to-orange gradient + heartbeat — THREAT */
+.badge-threat {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.25) 0%, rgba(243, 156, 18, 0.25) 100%);
+    color: #ff8c69;
+    border: 1px solid rgba(231, 76, 60, 0.6);
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.25);
+    animation: threatBeat 1.8s ease-in-out infinite;
+}
+@keyframes threatBeat {
+    0%, 100% { box-shadow: 0 0 8px rgba(231, 76, 60, 0.25); border-color: rgba(231, 76, 60, 0.6); }
+    50%       { box-shadow: 0 0 18px rgba(231, 76, 60, 0.6); border-color: rgba(243, 156, 18, 0.8); }
+}
+
+/* Gold shimmer scan — THE DEV */
+.badge-dev {
+    background: linear-gradient(135deg, rgba(241, 196, 15, 0.25) 0%, rgba(243, 156, 18, 0.25) 100%);
+    color: #f1c40f;
+    border: 1px solid rgba(241, 196, 15, 0.65);
+    box-shadow: 0 0 12px rgba(241, 196, 15, 0.3);
+    animation: devGlow 2s ease-in-out infinite;
+}
+.badge-dev::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -80%;
+    width: 45%; height: 200%;
+    background: rgba(255, 255, 255, 0.25);
+    transform: skewX(-20deg);
+    animation: devScan 2.2s ease-in-out infinite;
+}
+@keyframes devGlow {
+    0%, 100% { box-shadow: 0 0 10px rgba(241, 196, 15, 0.3); }
+    50%       { box-shadow: 0 0 22px rgba(241, 196, 15, 0.7); }
+}
+@keyframes devScan {
+    0%   { left: -80%; }
+    100% { left: 160%; }
+}
+
+/* Shifting hue border + sparkle — VIP */
+.badge-vip {
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.2), rgba(52, 152, 219, 0.2), rgba(241, 196, 15, 0.2));
+    color: #e8d5f5;
+    border: 1px solid rgba(200, 160, 255, 0.5);
+    animation: vipShift 3s linear infinite;
+}
+.badge-vip::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -80%;
+    width: 40%; height: 200%;
+    background: rgba(255, 255, 255, 0.18);
+    transform: skewX(-20deg);
+    animation: devScan 3s ease-in-out infinite;
+}
+@keyframes vipShift {
+    0%   { border-color: rgba(155, 89, 182, 0.7); color: #c39bd3; box-shadow: 0 0 10px rgba(155, 89, 182, 0.3); }
+    33%  { border-color: rgba(52, 152, 219, 0.7);  color: #85c1e9; box-shadow: 0 0 10px rgba(52, 152, 219, 0.3); }
+    66%  { border-color: rgba(241, 196, 15, 0.7);  color: #f1c40f; box-shadow: 0 0 10px rgba(241, 196, 15, 0.3); }
+    100% { border-color: rgba(155, 89, 182, 0.7);  color: #c39bd3; box-shadow: 0 0 10px rgba(155, 89, 182, 0.3); }
+}
 
 .tooltip-box { position: relative; cursor: help; }
 .tooltip-box:hover::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background: var(--tooltip-bg); color: var(--text-main); padding: 6px 12px; border-radius: 4px; font-size: 0.75rem; width: max-content; max-width: 250px; text-align: center; border: 1px solid var(--border); z-index: 100; white-space: normal; line-height: 1.4; font-family: 'Roboto', sans-serif; box-shadow: 0 4px 15px var(--shadow); pointer-events: none; }

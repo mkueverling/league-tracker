@@ -158,6 +158,31 @@ def add_custom_pro():
                         player_id = EXCLUDED.player_id;
                 """, (puuid, player_id, riot_id))
                 print(f"   -> [OK]     {riot_id}")
+
+                # Fetch all champion masteries for this account and store them
+                # so tot_mast / THREAT / SECRET WEAPON are accurate at scan time
+                print(f"      Fetching mastery data...", end=" ", flush=True)
+                time.sleep(1.2)
+                mastery_url = f"https://euw1.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}"
+                m_res = requests.get(mastery_url, headers=RIOT_HEADERS)
+
+                if m_res.status_code == 200:
+                    mastery_entries = m_res.json()
+                    if mastery_entries:
+                        cursor.executemany("""
+                            INSERT INTO account_mastery (puuid, champion_id, mastery_points)
+                            VALUES (%s, %s, %s)
+                            ON CONFLICT (puuid, champion_id) DO UPDATE SET
+                                mastery_points = EXCLUDED.mastery_points;
+                        """, [
+                            (puuid, entry['championId'], entry['championPoints'])
+                            for entry in mastery_entries
+                        ])
+                    print(f"{len(mastery_entries)} champions stored.")
+                elif m_res.status_code == 429:
+                    print("rate limited — mastery skipped, re-run later.")
+                else:
+                    print(f"failed (HTTP {m_res.status_code}) — mastery skipped.")
             else:
                 print(f"   -> [FAILED] {riot_id}  (HTTP {res.status_code})")
 

@@ -13,8 +13,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env_path = BASE_DIR / '.env'
 load_dotenv(dotenv_path=env_path, override=True)
 
-PRO_IMAGE_DIR = "public/images/pros"
-TEAM_IMAGE_DIR = "public/images/teams"
+# Updated Paths: Now points to the root 'images' folder alongside your backend
+PRO_IMAGE_DIR = os.path.join(BASE_DIR, "images", "pros")
+TEAM_IMAGE_DIR = os.path.join(BASE_DIR, "images", "teams")
+
 os.makedirs(PRO_IMAGE_DIR, exist_ok=True)
 os.makedirs(TEAM_IMAGE_DIR, exist_ok=True)
 
@@ -125,7 +127,8 @@ def get_fandom_url(site, filename):
     return safe_api_call(_query, description=f"image URL for {filename}")
 
 
-def download_file(site, filename, target_folder, prefix=""):
+# Updated to use web_prefix instead of the split('public/') hack
+def download_file(site, filename, target_folder, prefix="", web_prefix=""):
     """
     Save a remote Fandom file locally. Checks disk FIRST so we never hit the API
     for a file we already have.
@@ -137,7 +140,7 @@ def download_file(site, filename, target_folder, prefix=""):
     ext = re.sub(r'[^a-z0-9]', '', ext) or 'png'
     local_filename = f"{prefix.replace(' ', '_').lower()}.{ext}"
     filepath = os.path.join(target_folder, local_filename)
-    public_rel = f"/{target_folder.split('public/')[1]}/{local_filename}"
+    public_rel = f"{web_prefix}/{local_filename}"
 
     if os.path.exists(filepath):
         return public_rel
@@ -291,15 +294,17 @@ def fetch_and_upsert_fandom_pros():
             print(f" [+] Processing '{f_id}'")
 
             # Portrait: prefer local, else download whatever batch query found.
+            # Passed web_prefix to match your FastAPI endpoints
             portrait_local = local_portrait_path(f_id)
             if portrait_local is None:
                 best_file = image_map.get(f_id)
                 if best_file:
                     portrait_local = download_file(
-                        site, best_file, PRO_IMAGE_DIR, f_id
+                        site, best_file, PRO_IMAGE_DIR, f_id, web_prefix="/images/pros"
                     )
 
             # Team logo: use per-run in-memory cache + disk cache.
+            # Passed web_prefix to match your FastAPI endpoints
             team_name = item.get("Team")
             team_logo_local = None
             if team_name:
@@ -310,7 +315,7 @@ def fetch_and_upsert_fandom_pros():
                     if team_logo_local is None:
                         team_logo_local = download_file(
                             site, f"{team_name}logo square.png",
-                            TEAM_IMAGE_DIR, team_name
+                            TEAM_IMAGE_DIR, team_name, web_prefix="/images/teams"
                         )
                     team_logo_cache[team_name] = team_logo_local
 
