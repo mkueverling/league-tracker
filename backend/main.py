@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import requests, os, urllib.parse, psycopg2, time
+import requests, os, urllib.parse, psycopg2, time, itertools
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv, find_dotenv
 
@@ -12,11 +12,107 @@ REGION, PLATFORM = "europe", "euw1"
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-# --- EXACT FOLDER MAPPING ---
-# The "../images" steps out of the backend folder to find your root images folder
 app.mount("/images", StaticFiles(directory="../images"), name="images")
 
+# --- CHAMPION & ROLE LOGIC ENGINE ---
+CHAMP_ID_TO_NAME = {}
+try:
+    ver_res = requests.get("https://ddragon.leagueoflegends.com/api/versions.json", timeout=5)
+    dd_patch = ver_res.json()[0]
+    champ_res = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{dd_patch}/data/en_US/champion.json", timeout=5)
+    CHAMP_ID_TO_NAME = {int(v['key']): k for k, v in champ_res.json()['data'].items()}
+except Exception as e:
+    print(f"Warning: Could not load DDragon Champ Data: {e}")
+
+# Robust Champion Identity Pools (The new primary weight)
+TOP_CHAMPS = {"Aatrox", "Camille", "ChoGath", "Darius", "DrMundo", "Fiora", "Gangplank", "Garen", "Gnar", "Gwen", "Illaoi", "Irelia", "Jax", "Jayce", "KSante", "Kayle", "Kennen", "Kled", "Malphite", "Mordekaiser", "Nasus", "Olaf", "Ornn", "Pantheon", "Poppy", "Quinn", "Renekton", "Riven", "Rumble", "Sett", "Shen", "Singed", "Sion", "TahmKench", "Teemo", "Tryndamere", "Urgot", "Volibear", "Wukong", "Yorick", "Ambessa"}
+JUNGLE_CHAMPS = {"Amumu", "Belveth", "Briar", "Diana", "Ekko", "Elise", "Evelynn", "Fiddlesticks", "Gragas", "Graves", "Hecarim", "Ivern", "JarvanIV", "Karthus", "Kayn", "KhaZix", "Kindred", "LeeSin", "Lillia", "MasterYi", "Nidalee", "Nocturne", "Nunu", "Rammus", "Rengar", "Sejuani", "Shaco", "Shyvana", "Skarner", "Talon", "Udyr", "Vi", "Viego", "Warwick", "XinZhao", "Zac"}
+MID_CHAMPS = {"Ahri", "Akali", "Akshan", "Anivia", "Annie", "AurelionSol", "Azir", "Cassiopeia", "Corki", "Ekko", "Fizz", "Galio", "Hwei", "Irelia", "Kassadin", "Katarina", "LeBlanc", "Lissandra", "Malzahar", "Naafiri", "Neeko", "Orianna", "Qiyana", "Ryze", "Sylas", "Syndra", "Talon", "TwistedFate", "Veigar", "Vex", "Viktor", "Vladimir", "Xerath", "Yasuo", "Yone", "Zed", "Zoe", "Mel"}
+BOT_CHAMPS = {"Aphelios", "Ashe", "Caitlyn", "Draven", "Ezreal", "Jhin", "Jinx", "Kaisa", "Kalista", "KogMaw", "Lucian", "MissFortune", "Nilah", "Samira", "Sivir", "Smolder", "Tristana", "Twitch", "Varus", "Vayne", "Xayah", "Zeri"}
+SUPP_CHAMPS = {"Alistar", "Bard", "Blitzcrank", "Braum", "Janna", "Karma", "Leona", "Lulu", "Milio", "Morgana", "Nami", "Nautilus", "Pyke", "Rakan", "Rell", "Renata", "Senna", "Seraphine", "Sona", "Soraka", "Taric", "Thresh", "Yuumi", "Zilean", "Zyra", "Mel"}
+
+SMITE, TELEPORT, IGNITE, EXHAUST, HEAL, BARRIER, CLEANSE, GHOST = 11, 12, 14, 3, 7, 21, 1, 6
+
+def assign_roles_and_sort(team):
+    unassigned = list(team)
+    
+    # 1. Lock in Pro Roles from DB immediately
+    locked_roles = {}
+    for p in unassigned[:]:
+        if p.get('role'):
+            pr = p['role'].lower().strip()
+            if pr == "adc": pr = "bot"
+            if pr == "jungler": pr = "jungle"
+            if pr not in locked_roles:
+                locked_roles[pr] = p
+                unassigned.remove(p)
+
+    ROLES = ["top", "jungle", "mid", "bot", "support"]
+    available_roles = [r for r in ROLES if r not in locked_roles]
+
+    def get_score(p, role):
+        score = 0
+        cname = CHAMP_ID_TO_NAME.get(p.get('championId'), "")
+        
+        has_smite = p.get('spell1Id') == SMITE or p.get('spell2Id') == SMITE
+        has_tp = p.get('spell1Id') == TELEPORT or p.get('spell2Id') == TELEPORT
+        has_heal = p.get('spell1Id') == HEAL or p.get('spell2Id') == HEAL
+        has_exhaust = p.get('spell1Id') == EXHAUST or p.get('spell2Id') == EXHAUST
+        has_ignite = p.get('spell1Id') == IGNITE or p.get('spell2Id') == IGNITE
+
+        # MASSIVE Weight for Champion Identity
+        if role == "top" and cname in TOP_CHAMPS: score += 500
+        if role == "jungle" and cname in JUNGLE_CHAMPS: score += 500
+        if role == "mid" and cname in MID_CHAMPS: score += 500
+        if role == "bot" and cname in BOT_CHAMPS: score += 500
+        if role == "support" and cname in SUPP_CHAMPS: score += 500
+
+        # Absolute Smite Rules
+        if role == "jungle":
+            if has_smite: score += 2000
+            else: score -= 2000
+        else:
+            if has_smite: score -= 2000
+
+        # Minor Tie-Breaker Weights for Summoner Spells
+        if role == "top" and has_tp: score += 20
+        if role == "mid" and (has_tp or has_ignite): score += 10
+        if role == "bot" and has_heal: score += 20
+        if role == "support" and (has_exhaust or has_ignite): score += 20
+        if role == "support" and has_tp: score -= 100 # Supports almost never TP
+
+        return score
+
+    # 2. Test all permutations of remaining roles to find the highest total team score
+    best_score = -float('inf')
+    best_assignment = {}
+
+    for perm in itertools.permutations(available_roles):
+        current_score = sum(get_score(p, perm[i]) for i, p in enumerate(unassigned))
+        
+        if current_score > best_score:
+            best_score = current_score
+            best_assignment = {perm[i]: p for i, p in enumerate(unassigned)}
+
+    # 3. Combine locked roles and guessed roles
+    final_roles = {**locked_roles, **best_assignment}
+
+    # 4. Reconstruct the array in exact Top -> Support order
+    ordered = []
+    for r in ROLES:
+        if r in final_roles:
+            final_roles[r]['guessed_role'] = r
+            ordered.append(final_roles[r])
+            
+    # Fallback for weird edge cases (DCs, Custom games)
+    for p in unassigned:
+        if p not in ordered:
+            p['guessed_role'] = "fill"
+            ordered.append(p)
+            
+    return ordered
+
+# --- DATABASE AND ENDPOINTS ---
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"), database=os.getenv("DB_NAME"), 
@@ -71,14 +167,22 @@ def get_player(name: str, tag: str):
         spec_url = f"https://{PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{target_puuid}"
         spec_res = requests.get(spec_url, headers=HEADERS, timeout=5)
         
-        if spec_res.status_code == 429: raise HTTPException(status_code=429, detail="Riot API rate limit reached. Please wait 2 minutes.")
+        if spec_res.status_code == 429: raise HTTPException(status_code=429, detail="Riot API rate limit reached.")
         if spec_res.status_code != 200: return {"status": "history"}
 
         game_data = spec_res.json()
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        searcher_team_id = next((p['teamId'] for p in game_data['participants'] if p.get('puuid') == target_puuid), 100)
+        searcher_team_id = 100
+        search_string = f"{name}#{tag}".lower()
+        for p in game_data['participants']:
+            p_puuid = p.get('puuid')
+            p_riot_id = p.get('riotId', '').lower()
+            if (p_puuid and p_puuid == target_puuid) or (p_riot_id == search_string):
+                searcher_team_id = p['teamId']
+                break
+
         searcher_tag = get_streak_tag(cursor, target_puuid)
         
         allies, enemies = [], []
@@ -94,6 +198,7 @@ def get_player(name: str, tag: str):
             player_entry, cur_mast, tot_mast, tag_disp = None, 0, 0, None
             rank_data = {"tier": "unranked", "lp": 0}
             smurfs_list = []
+            ladder_rank = None
 
             is_pro = False
             is_creator = False
@@ -104,11 +209,32 @@ def get_player(name: str, tag: str):
             real_name = None
             birthday = None
 
+            perks = p.get('perks', {})
+            perk_ids = perks.get('perkIds', [])
+            primary_perk = perk_ids[0] if len(perk_ids) > 0 else 0
+            sub_style = perks.get('perkSubStyle', 0)
+
             if not is_streamer:
-                cursor.execute("SELECT p.* FROM players p JOIN accounts a ON p.player_id = a.player_id WHERE a.puuid = %s OR a.riot_id = %s LIMIT 1", (puuid, riot_id))
+                participant_slug = riot_id.split('#')[0].strip().replace(" ", "-")
+                cursor.execute("""
+                    SELECT p.* FROM players p 
+                    JOIN accounts a ON p.player_id = a.player_id 
+                    WHERE a.puuid = %s 
+                       OR LOWER(a.riot_id) = LOWER(%s) 
+                       OR p.name = LOWER(%s)
+                    LIMIT 1
+                """, (puuid, riot_id, participant_slug))
                 player_entry = cursor.fetchone()
+                
                 rank_data = get_rank_info(puuid)
                 p_streak = get_streak_tag(cursor, puuid)
+
+                try:
+                    cursor.execute("SELECT rank FROM apex_ladder WHERE puuid = %s", (puuid,))
+                    lr_row = cursor.fetchone()
+                    ladder_rank = lr_row['rank'] if lr_row else None
+                except Exception:
+                    pass
 
                 if player_entry:
                     cursor.execute("SELECT riot_id FROM accounts WHERE player_id = %s AND riot_id != %s", (player_entry['player_id'], riot_id))
@@ -122,12 +248,11 @@ def get_player(name: str, tag: str):
                     if t_twitter and str(t_twitter).strip() and str(t_twitter).strip().lower() != "none": socials_dict["Twitter"] = str(t_twitter).strip()
                     if t_youtube and str(t_youtube).strip() and str(t_youtube).strip().lower() != "none": socials_dict["YouTube"] = str(t_youtube).strip()
 
-                    is_pro = bool(player_entry.get('is_pro'))
-                    is_creator = bool(player_entry.get('is_creator')) or (len(socials_dict) > 0)
+                    is_pro = bool(player_entry.get('team')) if player_entry else False
+                    is_creator = "YouTube" in socials_dict
                     
                     if not is_pro and not is_creator: is_pro = True
 
-                    # Extract DB URLs and inject localhost to ensure cross-origin loading works
                     raw_img = player_entry.get('profile_image_url')
                     if raw_img and str(raw_img).strip().lower() != "none":
                         real_img = base_url + raw_img if raw_img.startswith('/') else raw_img
@@ -173,8 +298,11 @@ def get_player(name: str, tag: str):
             p_payload = {
                 "puuid": puuid, "riotId": riot_id,
                 "is_streamer": is_streamer, "championId": champ_id, 
+                "spell1Id": p.get('spell1Id'), "spell2Id": p.get('spell2Id'), 
+                "primary_perk": primary_perk, "sub_style": sub_style,
                 "is_pro": is_pro, "is_creator": is_creator,
                 "known_name": player_entry.get('known_name') or player_entry.get('name') if player_entry else None,
+                "ladder_rank": ladder_rank, 
                 "team": player_entry.get('team') if player_entry else None,
                 "role": player_entry.get('role') if player_entry else None,
                 "nationality": player_entry.get('nationality') if player_entry else None,
@@ -190,7 +318,12 @@ def get_player(name: str, tag: str):
             if p['teamId'] == searcher_team_id: allies.append(p_payload)
             else: enemies.append(p_payload)
 
-        return {"status": "live", "allies": allies, "enemies": enemies, "ff_angle": (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0)}
+        return {
+            "status": "live", 
+            "allies": assign_roles_and_sort(allies), 
+            "enemies": assign_roles_and_sort(enemies), 
+            "ff_angle": (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0)
+        }
     except HTTPException: raise 
     except Exception as e: 
         print(f"CRITICAL ERROR: {e}") 
@@ -232,6 +365,7 @@ def get_match_history(puuid: str, start: int = 0, count: int = 5):
 
                 history_data.append({
                     "matchId": match_id, "puuid": puuid,
+                    "duration": data['info']['gameDuration'],
                     "result": "VICTORY" if me['win'] else "DEFEAT", "isWin": me['win'],
                     "myChamp": me['championName'], "oppChamp": opponent['championName'] if opponent else "Unknown",
                     "kda": f"{me['kills']} / {me['deaths']} / {me['assists']}", "kp": f"{kp}%",
@@ -278,7 +412,6 @@ def get_team_roster(team_name: str):
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Fetches players and orders them by standard League role order
         cursor.execute("""
             SELECT known_name, name, role, profile_image_url, nationality
             FROM players 
@@ -315,4 +448,4 @@ def get_team_roster(team_name: str):
         print(f"Roster Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch team roster")
     finally:
-        if conn: conn.close()   
+        if conn: conn.close()
