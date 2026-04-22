@@ -202,6 +202,7 @@ def get_player(name: str, tag: str):
 
             is_pro = False
             is_creator = False
+            db_special_tag = None
             socials_dict = {}
             real_img = None
             team_logo = None
@@ -250,8 +251,6 @@ def get_player(name: str, tag: str):
 
                     is_pro = bool(player_entry.get('team')) if player_entry else False
                     is_creator = "YouTube" in socials_dict
-                    
-                    if not is_pro and not is_creator: is_pro = True
 
                     raw_img = player_entry.get('profile_image_url')
                     if raw_img and str(raw_img).strip().lower() != "none":
@@ -283,9 +282,13 @@ def get_player(name: str, tag: str):
                 
                 tag_disp = tag_disp or (searcher_tag if puuid == target_puuid else p_streak)
                 if p_streak == "Winners Queue" and tot_mast > 200000: tag_disp = "YOU'RE COOKED"
+                # SECRET WEAPON: plays this champ rarely on this account, but is a monster on it overall
                 if cur_mast < 50000 and tot_mast > 500000: tag_disp = "SECRET WEAPON"
+                # THREAT supersedes SECRET WEAPON — 1.5M total = OTP territory regardless of account
+                if tot_mast >= 1_500_000: tag_disp = "THREAT"
 
                 db_special_tag = player_entry.get('special_tag') if player_entry else None
+                # DEV and VIP are manually set in DB — they override all computed tags
                 if db_special_tag: tag_disp = db_special_tag
 
                 if p['teamId'] == searcher_team_id:
@@ -301,6 +304,7 @@ def get_player(name: str, tag: str):
                 "spell1Id": p.get('spell1Id'), "spell2Id": p.get('spell2Id'), 
                 "primary_perk": primary_perk, "sub_style": sub_style,
                 "is_pro": is_pro, "is_creator": is_creator,
+                "is_vip": (db_special_tag == 'VIP'),
                 "known_name": player_entry.get('known_name') or player_entry.get('name') if player_entry else None,
                 "ladder_rank": ladder_rank, 
                 "team": player_entry.get('team') if player_entry else None,
@@ -319,7 +323,8 @@ def get_player(name: str, tag: str):
             else: enemies.append(p_payload)
 
         return {
-            "status": "live", 
+            "status": "live",
+            "game_length": game_data.get('gameLength', 0),
             "allies": assign_roles_and_sort(allies), 
             "enemies": assign_roles_and_sort(enemies), 
             "ff_angle": (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0)
