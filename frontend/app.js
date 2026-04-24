@@ -78,15 +78,16 @@ function formatMastery(points) {
 }
 
 function getBadgeClass(tag) {
-    if (["Winners Queue", "On Fire", "STOMP ANGLE?", "Winning"].includes(tag)) return "badge-positive";
-    if (["Unlucky", "Losers Queue", "TILT SWAPPED", "YOU'RE COOKED", "FF ANGLE?", "Tilted"].includes(tag)) return "badge-negative";
+    if (["Winners Queue", "On Fire", "STOMP ANGLE?", "Winning", "HIGH SYNERGY"].includes(tag)) return "badge-positive";
+    if (["Unlucky", "Losers Queue", "TILT SWAPPED", "YOU'RE COOKED", "FF ANGLE?", "Tilted", "SKILL ISSUE"].includes(tag)) return "badge-negative";
+    if (tag === "OBSESSED")       return "badge-obsessed";
+    if (tag === "CREATURE")       return "badge-creature";
     if (tag === "THREAT")         return "badge-threat";
     if (tag === "SECRET WEAPON")  return "badge-secret-weapon";
     if (tag === "THE DEV")        return "badge-dev";
     if (tag === "VIP")            return "badge-vip";
     if (tag === "PRO PLAYER")     return "badge-pro";
     if (["STREAMER", "CONTENT CREATOR"].includes(tag)) return "badge-creator";
-    if (tag.startsWith("FAMILIAR")) return "badge-special";
     return "badge-neutral"; 
 }
 
@@ -95,6 +96,8 @@ function getTagTooltip(tag) {
         'PRO PLAYER':       'Active professional player on a roster',
         'STREAMER':         'Streams live on Twitch',
         'CONTENT CREATOR':  'YouTube content creator',
+        'OBSESSED':         '3M+ mastery — Needs to touch grass immediately',
+        'CREATURE':         '5M+ mastery — Absolute monster on this champion',
         'THREAT':           '1.5M+ mastery — OTP territory on this champion',
         'SECRET WEAPON':    'Low mastery on this account, but enormous across their other accounts',
         'THE DEV':          '👨‍💻 The guy who built this',
@@ -108,8 +111,9 @@ function getTagTooltip(tag) {
         "YOU'RE COOKED":    'Enemy on a hot streak with heavy mastery — pray',
         'FF ANGLE?':        'Enemy team mastery and win momentum strongly favored',
         'INSECURE':         'Streamer mode active — identity hidden by Riot',
+        'HIGH SYNERGY':     'At least two players on this team play for the same pro team.',
+        'SKILL ISSUE':      'This team has 50% or less total mastery compared to the enemy.'
     };
-    if (tag.startsWith("FAMILIAR")) return "Based on matches stored in the database. W/ = Matches played on same team. VS = Matches against each other.";
     return tips[tag] || null;
 }
 
@@ -126,14 +130,18 @@ function computeTags(p) {
     if (hasTwitch && !hasYouTube) tags.push('STREAMER');
     if (hasYouTube) tags.push('CONTENT CREATOR');
 
-    const isThreat = (p.total_mastery || 0) >= 1_500_000;
-    if (isThreat) {
+    const tot_mast = p.total_mastery || 0;
+    if (tot_mast >= 5_000_000) {
+        tags.push('CREATURE');
+    } else if (tot_mast >= 3_000_000) {
+        tags.push('OBSESSED');
+    } else if (tot_mast >= 1_500_000) {
         tags.push('THREAT');
-    } else if ((p.total_mastery || 0) >= 300000 && (p.current_mastery || 0) <= (p.total_mastery || 0) * 0.3) {
+    } else if (tot_mast >= 300000 && (p.current_mastery || 0) <= tot_mast * 0.3) {
         tags.push('SECRET WEAPON');
     }
 
-    const computedTagSet = new Set(['THE DEV', 'VIP', 'THREAT', 'SECRET WEAPON']);
+    const computedTagSet = new Set(['THE DEV', 'VIP', 'OBSESSED', 'CREATURE', 'THREAT', 'SECRET WEAPON']);
     if (p.tag && !computedTagSet.has(p.tag)) tags.push(p.tag);
 
     return tags;
@@ -149,7 +157,21 @@ function renderTeamSummary(teamArray, side, teamTags) {
         const tipAttr = tip ? ` data-tooltip="${tip}"` : '';
         return `<div class="${cls}"${tipAttr}>${tag}</div>`;
     }).join('');
-    return `<div class="card summary-card ${sideClass}"><div class="row-content"><div class="identity-group"></div><div class="mastery-group"><div class="mastery-label" style="color: var(--gold);">TEAM MASTERY</div><div class="mastery-score">${formatMastery(totalMastery)}</div></div><div class="stats-group"></div><div class="tags-group">${tagHtml}</div></div></div>`;
+    
+    // --- NEW: Box-Model Flex Track Wrapper ---
+    // Injecting summary-box-* classes directly onto the flex tracks forces the dashed 
+    // box to permanently align with the player card columns, ignoring scaling issues.
+    return `<div class="card summary-card ${sideClass}">
+        <div class="row-content">
+            <div class="identity-group"></div>
+            <div class="mastery-group summary-box-left">
+                <div class="mastery-label" style="color: var(--gold);">TEAM MASTERY</div>
+                <div class="mastery-score">${formatMastery(totalMastery)}</div>
+            </div>
+            <div class="stats-group summary-box-mid"></div>
+            <div class="tags-group summary-box-right">${tagHtml}</div>
+        </div>
+    </div>`;
 }
 
 function render(p, index) {
@@ -215,7 +237,6 @@ function render(p, index) {
     const mantraHtml = p.mantra ? `<div class="mantra-text" style="margin-top: 0.2rem; color: var(--text-muted); font-size: 0.85rem;">— "${p.mantra}"</div>` : '';
 
     let identityHtml = '';
-    
     if (isDev) {
         identityHtml = `
             <div class="identity-group-dev">
@@ -237,7 +258,7 @@ function render(p, index) {
     } else {
         identityHtml = `
             <div class="riot-id-wrapper">
-                <span class="main-name truncate-text">${p.riotId}</span>
+                <span class="main-name truncate-text">${p.known_name || p.riotId.split('#')[0]}</span>
                 ${rankHtml}
                 ${mantraHtml}
             </div>
@@ -265,15 +286,17 @@ function render(p, index) {
 
     const computedTagList = computeTags(p);
     
-    // Apply styling logic for True Mastery Score
     let masteryScoreClass = 'mastery-score';
-    if (computedTagList.includes('THREAT') || p.tag === 'THREAT') {
+    if (computedTagList.includes('OBSESSED') || p.tag === 'OBSESSED') {
+        masteryScoreClass += ' obsessed-text';
+    } else if (computedTagList.includes('CREATURE') || p.tag === 'CREATURE') {
+        masteryScoreClass += ' creature-text';
+    } else if (computedTagList.includes('THREAT') || p.tag === 'THREAT') {
         masteryScoreClass += ' threat-text';
     } else if (computedTagList.includes('SECRET WEAPON') || p.tag === 'SECRET WEAPON') {
         masteryScoreClass += ' secret-weapon-text';
     }
 
-    // NEW: Highlight True Mastery Label in Gold if points are hidden on smurfs
     const hasHiddenMastery = (p.total_mastery || 0) > (p.current_mastery || 0);
     const masteryLabelStyle = hasHiddenMastery ? 'color: var(--gold); text-shadow: 0 0 8px rgba(241, 196, 15, 0.4);' : '';
 
@@ -284,6 +307,7 @@ function render(p, index) {
         return `<div class="${cls}"${tipAttr}>${tag}</div>`;
     }).join('');
 
+    let familiarTabHtml = '';
     if (p.familiar_stats && (p.familiar_stats.wins_with > 0 || p.familiar_stats.losses_with > 0 || p.familiar_stats.wins_against > 0 || p.familiar_stats.losses_against > 0)) {
         const f = p.familiar_stats;
         const totalWith = parseInt(f.wins_with) + parseInt(f.losses_with);
@@ -292,20 +316,25 @@ function render(p, index) {
         let textArr = [];
         if (totalWith > 0) {
             const wrWith = Math.round((parseInt(f.wins_with) / totalWith) * 100);
-            textArr.push(`W/ ${totalWith} (${wrWith}%)`);
+            textArr.push(`<span style="color:var(--blue);">W/ ${totalWith} <span style="opacity:0.6; font-size:0.65rem;">(${wrWith}%)</span></span>`);
         }
         if (totalAgainst > 0) {
             const wrAgainst = Math.round((parseInt(f.wins_against) / totalAgainst) * 100);
-            textArr.push(`VS ${totalAgainst} (${wrAgainst}%)`);
+            textArr.push(`<span style="color:var(--red);">VS ${totalAgainst} <span style="opacity:0.6; font-size:0.65rem;">(${wrAgainst}%)</span></span>`);
         }
         
-        const fTag = `FAMILIAR: ${textArr.join(' | ')}`;
-        const tip = getTagTooltip("FAMILIAR");
-        tagsHtml += `<div class="badge ${getBadgeClass(fTag)} tooltip-box" data-tooltip="${tip}">${fTag}</div>`;
+        const tip = "Based on matches stored in the database across all known accounts. W/ = Matches played on same team. VS = Matches against each other.";
+        familiarTabHtml = `
+            <div class="familiar-tab tooltip-box" data-tooltip="${tip}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="margin-right: 6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                ${textArr.join(' <span style="color:#404048; margin: 0 6px;">|</span> ')}
+            </div>
+        `;
     }
 
     return `
         <div class="card ${p.side}-card ${cardEffectClass}" style="position: relative; animation-delay: ${index * 0.15}s;" ${clickAction}>
+            ${familiarTabHtml}
             ${roleBadgeHtml}
             <div class="card-bg-wrapper"><div class="champ-splash" style="background-image: url('${splashImg}')"></div></div>
             <div class="row-content">
@@ -359,8 +388,29 @@ async function executeScan() {
             updateBanner(currentSeconds);
         }, 1000);
 
-        lTeam.innerHTML = renderTeamSummary(liveData.allies, 'ally', []) + liveData.allies.map((p, i) => render(p, i)).join('');
-        rTeam.innerHTML = renderTeamSummary(liveData.enemies, 'enemy', liveData.ff_angle ? ["FF ANGLE?"] : []) + liveData.enemies.map((p, i) => render(p, i)).join('');
+        let allySummaryTags = [];
+        let enemySummaryTags = [];
+
+        if (liveData.ally_synergy) allySummaryTags.push("HIGH SYNERGY");
+        if (liveData.enemy_synergy) enemySummaryTags.push("HIGH SYNERGY");
+
+        const getNormMast = (team) => {
+            let t = 0, k = 0;
+            team.forEach(p => { if(!p.is_streamer) { t += (p.total_mastery || 0); k++; } });
+            return k > 0 ? (t / k) * 5 : 0;
+        };
+        const aNorm = getNormMast(liveData.allies);
+        const eNorm = getNormMast(liveData.enemies);
+
+        if (aNorm > 0 && eNorm > 0) {
+            if (aNorm <= eNorm / 2) allySummaryTags.push("SKILL ISSUE");
+            if (eNorm <= aNorm / 2) enemySummaryTags.push("SKILL ISSUE");
+        }
+
+        if (liveData.ff_angle) enemySummaryTags.push("FF ANGLE?");
+
+        lTeam.innerHTML = renderTeamSummary(liveData.allies, 'ally', allySummaryTags) + liveData.allies.map((p, i) => render(p, i)).join('');
+        rTeam.innerHTML = renderTeamSummary(liveData.enemies, 'enemy', enemySummaryTags) + liveData.enemies.map((p, i) => render(p, i)).join('');
     }catch (e) {
         document.getElementById('intel-text').innerHTML = `<span class='intel-accent' style='color:var(--red);'>ERROR:</span> ${e.message}`;
         document.getElementById('intel-banner').style.display = 'flex';

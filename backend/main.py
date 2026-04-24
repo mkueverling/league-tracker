@@ -149,7 +149,6 @@ def get_player(name: str, tag: str):
         
         target_puuid = acc_res.json().get('puuid')
 
-        # --- MOVED UP: Connect to DB and track the user BEFORE checking if they are in a game ---
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -163,7 +162,6 @@ def get_player(name: str, tag: str):
         except Exception as db_err:
             print(f"[!] Tracking Table Error: {db_err}")
 
-        # --- NOW check if they are in a live game ---
         spec_url = f"https://{PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{target_puuid}"
         spec_res = requests.get(spec_url, headers=HEADERS, timeout=5)
         
@@ -175,34 +173,55 @@ def get_player(name: str, tag: str):
         searcher_team_id = 100
         search_string = f"{name}#{tag}".lower()
         lobby_puuids = []
+        ally_puuids = []
+        enemy_puuids = []
+        
         for p in game_data['participants']:
             p_puuid = p.get('puuid')
-            if p_puuid: lobby_puuids.append(p_puuid)
             p_riot_id = p.get('riotId', '').lower()
+            if p_puuid: lobby_puuids.append(p_puuid)
             if (p_puuid and p_puuid == target_puuid) or (p_riot_id == search_string):
                 searcher_team_id = p['teamId']
 
+        for p in game_data['participants']:
+            p_puuid = p.get('puuid')
+            if not p_puuid: continue
+            if p['teamId'] == searcher_team_id: ally_puuids.append(p_puuid)
+            else: enemy_puuids.append(p_puuid)
+
         searcher_tag = get_streak_tag(cursor, target_puuid)
         
-        # --- FAMILIAR FACES LOGIC ---
         familiar_data = {}
         other_puuids = [pid for pid in lobby_puuids if pid != target_puuid]
         if target_puuid and other_puuids:
             try:
                 cursor.execute("""
+                    WITH target_puuids AS (
+                        SELECT puuid FROM accounts 
+                        WHERE player_id = (SELECT player_id FROM accounts WHERE puuid = %(target)s)
+                        UNION SELECT %(target)s
+                    ),
+                    lobby_accounts AS (
+                        SELECT l.puuid AS lobby_puuid, COALESCE(a2.puuid, l.puuid) AS alias_puuid
+                        FROM unnest(%(lobby)s::varchar[]) l(puuid)
+                        LEFT JOIN accounts a1 ON a1.puuid = l.puuid
+                        LEFT JOIN accounts a2 ON a2.player_id = a1.player_id
+                    )
                     SELECT 
-                        mp_other.puuid,
+                        la.lobby_puuid as puuid,
                         SUM(CASE WHEN mp_target.win = true AND mp_target.team_id = mp_other.team_id THEN 1 ELSE 0 END) as wins_with,
                         SUM(CASE WHEN mp_target.win = false AND mp_target.team_id = mp_other.team_id THEN 1 ELSE 0 END) as losses_with,
                         SUM(CASE WHEN mp_target.win = true AND mp_target.team_id != mp_other.team_id THEN 1 ELSE 0 END) as wins_against,
                         SUM(CASE WHEN mp_target.win = false AND mp_target.team_id != mp_other.team_id THEN 1 ELSE 0 END) as losses_against
                     FROM match_participants mp_target
                     JOIN match_participants mp_other ON mp_target.match_id = mp_other.match_id
-                    WHERE mp_target.puuid = %s 
-                      AND mp_other.puuid = ANY(%s) 
-                      AND mp_other.puuid != mp_target.puuid
-                    GROUP BY mp_other.puuid;
-                """, (target_puuid, other_puuids))
+                    JOIN target_puuids tp ON mp_target.puuid = tp.puuid
+                    JOIN lobby_accounts la ON mp_other.puuid = la.alias_puuid
+                    WHERE la.lobby_puuid != %(target)s
+                      AND mp_other.puuid NOT IN (SELECT puuid FROM target_puuids)
+                    GROUP BY la.lobby_puuid;
+                """, {"target": target_puuid, "lobby": other_puuids})
+                
                 for row in cursor.fetchall():
                     familiar_data[row['puuid']] = dict(row)
             except Exception as e:
@@ -307,17 +326,15 @@ def get_player(name: str, tag: str):
                 if player_entry:
                     cursor.execute("SELECT SUM(am.mastery_points) as db_mast FROM account_mastery am JOIN accounts a ON am.puuid = a.puuid WHERE a.player_id = %s AND a.puuid != %s AND am.champion_id = %s", (player_entry['player_id'], puuid, champ_id))
                     db_res = cursor.fetchone()
-                    
-                    # FIXED: Wrapped the database result in int()
                     if db_res and db_res['db_mast']: tot_mast += int(db_res['db_mast'])
                 
                 tag_disp = tag_disp or (searcher_tag if puuid == target_puuid else p_streak)
                 if p_streak == "Winners Queue" and tot_mast > 200000: tag_disp = "YOU'RE COOKED"
-                
-                # --- UPDATED SECRET WEAPON LOGIC ---
                 if tot_mast >= 300000 and cur_mast <= (tot_mast * 0.3): tag_disp = "SECRET WEAPON"
                 
                 if tot_mast >= 1_500_000: tag_disp = "THREAT"
+                if tot_mast >= 3_000_000: tag_disp = "OBSESSED"
+                if tot_mast >= 5_000_000: tag_disp = "CREATURE"
 
                 db_special_tag = player_entry.get('special_tag') if player_entry else None
                 if db_special_tag: tag_disp = db_special_tag
@@ -354,12 +371,23 @@ def get_player(name: str, tag: str):
             if p['teamId'] == searcher_team_id: allies.append(p_payload)
             else: enemies.append(p_payload)
 
+        # --- SYNERGY CHECK (PRO TEAM) ---
+        def has_pro_synergy(team_list):
+            teams_count = {}
+            for participant in team_list:
+                t = participant.get("team")
+                if t:
+                    teams_count[t] = teams_count.get(t, 0) + 1
+            return any(count >= 2 for count in teams_count.values())
+
         return {
             "status": "live",
             "game_length": game_data.get('gameLength', 0),
             "allies": assign_roles_and_sort(allies), 
             "enemies": assign_roles_and_sort(enemies), 
-            "ff_angle": (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0)
+            "ff_angle": (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0),
+            "ally_synergy": has_pro_synergy(allies),
+            "enemy_synergy": has_pro_synergy(enemies)
         }
     except HTTPException: raise 
     except Exception as e: 
