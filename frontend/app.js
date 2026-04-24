@@ -84,14 +84,15 @@ function getBadgeClass(tag) {
     if (tag === "SECRET WEAPON")  return "badge-secret-weapon";
     if (tag === "THE DEV")        return "badge-dev";
     if (tag === "VIP")            return "badge-vip";
-    if (tag === "PRO")            return "badge-pro";
+    if (tag === "PRO PLAYER")     return "badge-pro";
     if (["STREAMER", "CONTENT CREATOR"].includes(tag)) return "badge-creator";
-    return "badge-neutral"; // covers INSECURE and anything unknown
+    if (tag.startsWith("FAMILIAR")) return "badge-special";
+    return "badge-neutral"; 
 }
 
 function getTagTooltip(tag) {
     const tips = {
-        'PRO':              'Active professional player on a roster',
+        'PRO PLAYER':       'Active professional player on a roster',
         'STREAMER':         'Streams live on Twitch',
         'CONTENT CREATOR':  'YouTube content creator',
         'THREAT':           '1.5M+ mastery — OTP territory on this champion',
@@ -108,13 +109,11 @@ function getTagTooltip(tag) {
         'FF ANGLE?':        'Enemy team mastery and win momentum strongly favored',
         'INSECURE':         'Streamer mode active — identity hidden by Riot',
     };
+    if (tag.startsWith("FAMILIAR")) return "Based on matches stored in the database. W/ = Matches played on same team. VS = Matches against each other.";
     return tips[tag] || null;
 }
 
-// Computes the full ordered list of tags for a player card.
-// Priority: DEV/VIP (manual DB tags) → PRO → STREAMER/CREATOR → THREAT → SECRET WEAPON → streak tags
 function computeTags(p) {
-    // DEV and VIP are manually assigned in DB and override all logic
     if (p.tag === 'THE DEV') return ['THE DEV'];
     if (p.tag === 'VIP')     return ['VIP'];
 
@@ -122,25 +121,18 @@ function computeTags(p) {
     const hasTwitch  = p.socials && p.socials.Twitch;
     const hasYouTube = p.socials && p.socials.YouTube;
 
-    // PRO: only when the player belongs to a team
-    if (p.team) tags.push('PRO');
+    if (p.team) tags.push('PRO PLAYER');
 
-    // STREAMER: Twitch linked, no YouTube → they stream but aren't a content creator
     if (hasTwitch && !hasYouTube) tags.push('STREAMER');
-
-    // CONTENT CREATOR: YouTube present (alone or alongside Twitch)
     if (hasYouTube) tags.push('CONTENT CREATOR');
 
-    // THREAT: ≥1.5M mastery on this champion across all accounts = OTP territory
     const isThreat = (p.total_mastery || 0) >= 1_500_000;
     if (isThreat) {
         tags.push('THREAT');
-    } else if ((p.current_mastery || 0) < 50000 && (p.total_mastery || 0) > 500000) {
-        // SECRET WEAPON: barely played on this account but dominant across smurfs
+    } else if ((p.total_mastery || 0) >= 300000 && (p.current_mastery || 0) <= (p.total_mastery || 0) * 0.3) {
         tags.push('SECRET WEAPON');
     }
 
-    // Dynamic streak / situational tag from backend (skip if it's one we already handle above)
     const computedTagSet = new Set(['THE DEV', 'VIP', 'THREAT', 'SECRET WEAPON']);
     if (p.tag && !computedTagSet.has(p.tag)) tags.push(p.tag);
 
@@ -164,14 +156,18 @@ function render(p, index) {
     const champName = championMap[p.championId] || "Unknown";
     const splashImg = `https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${champName}_0.jpg`;
     const clickAction = p.is_streamer ? "" : `onclick='openHistory(${JSON.stringify(p).replace(/'/g, "&#39;")})'`;
-    
-    const isDev = p.tag === 'THE DEV';
-    const cardEffectClass = isDev ? 'effect-the-dev' : '';
-
     const searchInput = document.getElementById('target').value.trim().toLowerCase();
     const isTarget = p.riotId.toLowerCase() === searchInput;
 
-    // --- 1. LEGIT CENTERED ROLE ICON ---
+    const isDev = p.tag === 'THE DEV';
+    let cardEffectClass = '';
+    
+    if (isDev) {
+        cardEffectClass = 'effect-the-dev';
+    } else if (p.is_pro || p.is_creator) {
+        cardEffectClass = 'effect-pro';
+    }
+
     const roleCleaned = p.guessed_role || "fill";
     const isAlly = p.side === "ally";
     
@@ -181,7 +177,6 @@ function render(p, index) {
         </div>
     ` : '';
 
-    // --- 2. FIXED 2X2 GRID ORDER ---
     const spell1 = summonerMap[p.spell1Id] || "SummonerFlash";
     const spell2 = summonerMap[p.spell2Id] || "SummonerFlash";
     const spell1Url = `https://ddragon.leagueoflegends.com/cdn/${patch}/img/spell/${spell1}.png`;
@@ -216,11 +211,21 @@ function render(p, index) {
         </div>`;
     }
 
-    const rankHtml = p.ladder_rank ? `<div style="color: var(--gold); font-weight: 900; font-size: 0.8rem; margin-top: 0.15rem; letter-spacing: 0.06rem;">#${p.ladder_rank}</div>` : '';
+    const rankHtml = p.ladder_rank ? `<div style="color: var(--text-muted); font-weight: 900; font-size: 0.8rem; margin-top: 0.15rem; letter-spacing: 0.06rem;">Rank: <span style="color: var(--gold);">#${p.ladder_rank}</span></div>` : '';
     const mantraHtml = p.mantra ? `<div class="mantra-text" style="margin-top: 0.2rem; color: var(--text-muted); font-size: 0.85rem;">— "${p.mantra}"</div>` : '';
 
     let identityHtml = '';
-    if (p.is_pro || p.is_creator || p.known_name) {
+    
+    if (isDev) {
+        identityHtml = `
+            <div class="identity-group-dev">
+                <div class="dev-name-animated">${p.known_name || p.riotId.split('#')[0]}</div>
+                <div class="riot-id-subtext">${p.riotId}</div>
+                ${rankHtml}
+                ${mantraHtml}
+            </div>
+        `;
+    } else if (p.is_pro || p.is_creator) {
         identityHtml = `
             <div class="identity-group-pro">
                 <div class="pro-name-gold">${p.known_name || p.riotId.split('#')[0]}</div>
@@ -258,12 +263,46 @@ function render(p, index) {
         `;
     }
 
-    let tagsHtml = computeTags(p).map(tag => {
+    const computedTagList = computeTags(p);
+    
+    // Apply styling logic for True Mastery Score
+    let masteryScoreClass = 'mastery-score';
+    if (computedTagList.includes('THREAT') || p.tag === 'THREAT') {
+        masteryScoreClass += ' threat-text';
+    } else if (computedTagList.includes('SECRET WEAPON') || p.tag === 'SECRET WEAPON') {
+        masteryScoreClass += ' secret-weapon-text';
+    }
+
+    // NEW: Highlight True Mastery Label in Gold if points are hidden on smurfs
+    const hasHiddenMastery = (p.total_mastery || 0) > (p.current_mastery || 0);
+    const masteryLabelStyle = hasHiddenMastery ? 'color: var(--gold); text-shadow: 0 0 8px rgba(241, 196, 15, 0.4);' : '';
+
+    let tagsHtml = computedTagList.map(tag => {
         const tip = getTagTooltip(tag);
         const cls = `badge ${getBadgeClass(tag)}${tip ? ' tooltip-box' : ''}`;
         const tipAttr = tip ? ` data-tooltip="${tip}"` : '';
         return `<div class="${cls}"${tipAttr}>${tag}</div>`;
     }).join('');
+
+    if (p.familiar_stats && (p.familiar_stats.wins_with > 0 || p.familiar_stats.losses_with > 0 || p.familiar_stats.wins_against > 0 || p.familiar_stats.losses_against > 0)) {
+        const f = p.familiar_stats;
+        const totalWith = parseInt(f.wins_with) + parseInt(f.losses_with);
+        const totalAgainst = parseInt(f.wins_against) + parseInt(f.losses_against);
+        
+        let textArr = [];
+        if (totalWith > 0) {
+            const wrWith = Math.round((parseInt(f.wins_with) / totalWith) * 100);
+            textArr.push(`W/ ${totalWith} (${wrWith}%)`);
+        }
+        if (totalAgainst > 0) {
+            const wrAgainst = Math.round((parseInt(f.wins_against) / totalAgainst) * 100);
+            textArr.push(`VS ${totalAgainst} (${wrAgainst}%)`);
+        }
+        
+        const fTag = `FAMILIAR: ${textArr.join(' | ')}`;
+        const tip = getTagTooltip("FAMILIAR");
+        tagsHtml += `<div class="badge ${getBadgeClass(fTag)} tooltip-box" data-tooltip="${tip}">${fTag}</div>`;
+    }
 
     return `
         <div class="card ${p.side}-card ${cardEffectClass}" style="position: relative; animation-delay: ${index * 0.15}s;" ${clickAction}>
@@ -273,8 +312,8 @@ function render(p, index) {
                 ${loadoutsHtml}
                 <div class="identity-group">${identityHtml}</div>
                 <div class="mastery-group tooltip-box" style="border-left: 0.06rem solid rgba(255, 255, 255, 0.08); border-right: 0.06rem solid rgba(255, 255, 255, 0.08);" data-tooltip="${formatMastery(p.current_mastery)} on this account, ${formatMastery(p.total_mastery)} total across all connected accounts.">
-                    <div class="mastery-label">True Mastery</div>
-                    <div class="mastery-score">${formatMastery(p.total_mastery)}</div>
+                    <div class="mastery-label" style="${masteryLabelStyle}">True Mastery</div>
+                    <div class="${masteryScoreClass}">${formatMastery(p.total_mastery)}</div>
                 </div>
                 <div class="stats-group">${statsHtml}</div>
                 <div class="tags-group">${tagsHtml}</div>
@@ -297,12 +336,10 @@ async function executeScan() {
         if (!res.ok) throw new Error(liveData.detail || "Player not found");
         if (liveData.status === "history") throw new Error("Player not currently in game.");
 
-        // Clear any existing timer from a previous scan
         if (liveTimerInterval) clearInterval(liveTimerInterval);
 
-        let currentSeconds = liveData.game_length;
+        let currentSeconds = Math.max(0, liveData.game_length || 0);
 
-        // Function to update the banner text
         const updateBanner = (seconds) => {
             const liveMinutes = Math.floor(seconds / 60);
             const liveSeconds = seconds % 60;
@@ -314,11 +351,9 @@ async function executeScan() {
             `;
         };
 
-        // Initial render
         updateBanner(currentSeconds);
         document.getElementById('intel-banner').style.display = 'flex';
 
-        // Start counting up every second
         liveTimerInterval = setInterval(() => {
             currentSeconds++;
             updateBanner(currentSeconds);
@@ -341,7 +376,7 @@ async function openHistory(p) {
     
     let idHtml = p.riotId;
     if (p.ladder_rank) {
-        idHtml += `<div style="color: var(--gold); font-weight: 900; margin-top: 4px; letter-spacing: 1px; font-size: 1.1rem;">#${p.ladder_rank}</div>`;
+        idHtml += `<div style="color: var(--text-muted); font-weight: 900; margin-top: 4px; letter-spacing: 1px; font-size: 1.1rem;">Rank: <span style="color: var(--gold);">#${p.ladder_rank}</span></div>`;
     }
     document.getElementById('panel-riot-id').innerHTML = idHtml;
 
@@ -393,7 +428,27 @@ async function openHistory(p) {
     if (p.smurfs && p.smurfs.length > 0) {
         smurfsHtml = `<div style="margin-top: 15px;"><div style="font-size: 0.75rem; color: #7b7a8e; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">Known Accounts</div><div style="display: flex; flex-wrap: wrap; gap: 6px;">${p.smurfs.map(s => `<span style="background: #282830; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; border: 1px solid #3e3e4a; color: var(--text-main);">${s}</span>`).join('')}</div></div>`;
     }
-    document.getElementById('panel-smurfs').innerHTML = smurfsHtml;
+
+    let familiarHtml = '';
+    if (p.familiar_stats && (p.familiar_stats.wins_with > 0 || p.familiar_stats.losses_with > 0 || p.familiar_stats.wins_against > 0 || p.familiar_stats.losses_against > 0)) {
+        const f = p.familiar_stats;
+        const totalWith = parseInt(f.wins_with) + parseInt(f.losses_with);
+        const totalAgainst = parseInt(f.wins_against) + parseInt(f.losses_against);
+        
+        let statBadges = [];
+        if (totalWith > 0) {
+            const wrWith = Math.round((parseInt(f.wins_with) / totalWith) * 100);
+            statBadges.push(`<span style="background: #282830; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; border: 1px solid #3e3e4a; color: var(--text-main);">Played With: ${totalWith} (${wrWith}% WR)</span>`);
+        }
+        if (totalAgainst > 0) {
+            const wrAgainst = Math.round((parseInt(f.wins_against) / totalAgainst) * 100);
+            statBadges.push(`<span style="background: #282830; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; border: 1px solid #3e3e4a; color: var(--text-main);">Played Against: ${totalAgainst} (${wrAgainst}% WR)</span>`);
+        }
+        
+        familiarHtml = `<div style="margin-top: 15px;"><div style="font-size: 0.75rem; color: #7b7a8e; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">Personal Match History</div><div style="display: flex; flex-wrap: wrap; gap: 6px;">${statBadges.join('')}</div></div>`;
+    }
+
+    document.getElementById('panel-smurfs').innerHTML = smurfsHtml + familiarHtml;
     document.getElementById('history-loading').innerHTML = `<div class="loader-ring" style="display:block; margin: 40px auto;"></div>`;
     await fetchAndRenderMatches(0);
 }

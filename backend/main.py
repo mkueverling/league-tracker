@@ -24,7 +24,6 @@ try:
 except Exception as e:
     print(f"Warning: Could not load DDragon Champ Data: {e}")
 
-# Robust Champion Identity Pools (The new primary weight)
 TOP_CHAMPS = {"Aatrox", "Camille", "ChoGath", "Darius", "DrMundo", "Fiora", "Gangplank", "Garen", "Gnar", "Gwen", "Illaoi", "Irelia", "Jax", "Jayce", "KSante", "Kayle", "Kennen", "Kled", "Malphite", "Mordekaiser", "Nasus", "Olaf", "Ornn", "Pantheon", "Poppy", "Quinn", "Renekton", "Riven", "Rumble", "Sett", "Shen", "Singed", "Sion", "TahmKench", "Teemo", "Tryndamere", "Urgot", "Volibear", "Wukong", "Yorick", "Ambessa"}
 JUNGLE_CHAMPS = {"Amumu", "Belveth", "Briar", "Diana", "Ekko", "Elise", "Evelynn", "Fiddlesticks", "Gragas", "Graves", "Hecarim", "Ivern", "JarvanIV", "Karthus", "Kayn", "KhaZix", "Kindred", "LeeSin", "Lillia", "MasterYi", "Nidalee", "Nocturne", "Nunu", "Rammus", "Rengar", "Sejuani", "Shaco", "Shyvana", "Skarner", "Talon", "Udyr", "Vi", "Viego", "Warwick", "XinZhao", "Zac"}
 MID_CHAMPS = {"Ahri", "Akali", "Akshan", "Anivia", "Annie", "AurelionSol", "Azir", "Cassiopeia", "Corki", "Ekko", "Fizz", "Galio", "Hwei", "Irelia", "Kassadin", "Katarina", "LeBlanc", "Lissandra", "Malzahar", "Naafiri", "Neeko", "Orianna", "Qiyana", "Ryze", "Sylas", "Syndra", "Talon", "TwistedFate", "Veigar", "Vex", "Viktor", "Vladimir", "Xerath", "Yasuo", "Yone", "Zed", "Zoe", "Mel"}
@@ -35,8 +34,6 @@ SMITE, TELEPORT, IGNITE, EXHAUST, HEAL, BARRIER, CLEANSE, GHOST = 11, 12, 14, 3,
 
 def assign_roles_and_sort(team):
     unassigned = list(team)
-    
-    # 1. Lock in Pro Roles from DB immediately
     locked_roles = {}
     for p in unassigned[:]:
         if p.get('role'):
@@ -53,58 +50,47 @@ def assign_roles_and_sort(team):
     def get_score(p, role):
         score = 0
         cname = CHAMP_ID_TO_NAME.get(p.get('championId'), "")
-        
         has_smite = p.get('spell1Id') == SMITE or p.get('spell2Id') == SMITE
         has_tp = p.get('spell1Id') == TELEPORT or p.get('spell2Id') == TELEPORT
         has_heal = p.get('spell1Id') == HEAL or p.get('spell2Id') == HEAL
         has_exhaust = p.get('spell1Id') == EXHAUST or p.get('spell2Id') == EXHAUST
         has_ignite = p.get('spell1Id') == IGNITE or p.get('spell2Id') == IGNITE
 
-        # MASSIVE Weight for Champion Identity
         if role == "top" and cname in TOP_CHAMPS: score += 500
         if role == "jungle" and cname in JUNGLE_CHAMPS: score += 500
         if role == "mid" and cname in MID_CHAMPS: score += 500
         if role == "bot" and cname in BOT_CHAMPS: score += 500
         if role == "support" and cname in SUPP_CHAMPS: score += 500
 
-        # Absolute Smite Rules
         if role == "jungle":
             if has_smite: score += 2000
             else: score -= 2000
         else:
             if has_smite: score -= 2000
 
-        # Minor Tie-Breaker Weights for Summoner Spells
         if role == "top" and has_tp: score += 20
         if role == "mid" and (has_tp or has_ignite): score += 10
         if role == "bot" and has_heal: score += 20
         if role == "support" and (has_exhaust or has_ignite): score += 20
-        if role == "support" and has_tp: score -= 100 # Supports almost never TP
+        if role == "support" and has_tp: score -= 100
 
         return score
 
-    # 2. Test all permutations of remaining roles to find the highest total team score
     best_score = -float('inf')
     best_assignment = {}
-
     for perm in itertools.permutations(available_roles):
         current_score = sum(get_score(p, perm[i]) for i, p in enumerate(unassigned))
-        
         if current_score > best_score:
             best_score = current_score
             best_assignment = {perm[i]: p for i, p in enumerate(unassigned)}
 
-    # 3. Combine locked roles and guessed roles
     final_roles = {**locked_roles, **best_assignment}
-
-    # 4. Reconstruct the array in exact Top -> Support order
     ordered = []
     for r in ROLES:
         if r in final_roles:
             final_roles[r]['guessed_role'] = r
             ordered.append(final_roles[r])
             
-    # Fallback for weird edge cases (DCs, Custom games)
     for p in unassigned:
         if p not in ordered:
             p['guessed_role'] = "fill"
@@ -112,7 +98,6 @@ def assign_roles_and_sort(team):
             
     return ordered
 
-# --- DATABASE AND ENDPOINTS ---
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"), database=os.getenv("DB_NAME"), 
@@ -164,6 +149,21 @@ def get_player(name: str, tag: str):
         
         target_puuid = acc_res.json().get('puuid')
 
+        # --- MOVED UP: Connect to DB and track the user BEFORE checking if they are in a game ---
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        try:
+            cursor.execute("""
+                INSERT INTO tracked_users (puuid, last_searched) 
+                VALUES (%s, NOW()) 
+                ON CONFLICT (puuid) DO UPDATE SET last_searched = NOW();
+            """, (target_puuid,))
+            conn.commit()
+        except Exception as db_err:
+            print(f"[!] Tracking Table Error: {db_err}")
+
+        # --- NOW check if they are in a live game ---
         spec_url = f"https://{PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{target_puuid}"
         spec_res = requests.get(spec_url, headers=HEADERS, timeout=5)
         
@@ -171,20 +171,43 @@ def get_player(name: str, tag: str):
         if spec_res.status_code != 200: return {"status": "history"}
 
         game_data = spec_res.json()
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         searcher_team_id = 100
         search_string = f"{name}#{tag}".lower()
+        lobby_puuids = []
         for p in game_data['participants']:
             p_puuid = p.get('puuid')
+            if p_puuid: lobby_puuids.append(p_puuid)
             p_riot_id = p.get('riotId', '').lower()
             if (p_puuid and p_puuid == target_puuid) or (p_riot_id == search_string):
                 searcher_team_id = p['teamId']
-                break
 
         searcher_tag = get_streak_tag(cursor, target_puuid)
         
+        # --- FAMILIAR FACES LOGIC ---
+        familiar_data = {}
+        other_puuids = [pid for pid in lobby_puuids if pid != target_puuid]
+        if target_puuid and other_puuids:
+            try:
+                cursor.execute("""
+                    SELECT 
+                        mp_other.puuid,
+                        SUM(CASE WHEN mp_target.win = true AND mp_target.team_id = mp_other.team_id THEN 1 ELSE 0 END) as wins_with,
+                        SUM(CASE WHEN mp_target.win = false AND mp_target.team_id = mp_other.team_id THEN 1 ELSE 0 END) as losses_with,
+                        SUM(CASE WHEN mp_target.win = true AND mp_target.team_id != mp_other.team_id THEN 1 ELSE 0 END) as wins_against,
+                        SUM(CASE WHEN mp_target.win = false AND mp_target.team_id != mp_other.team_id THEN 1 ELSE 0 END) as losses_against
+                    FROM match_participants mp_target
+                    JOIN match_participants mp_other ON mp_target.match_id = mp_other.match_id
+                    WHERE mp_target.puuid = %s 
+                      AND mp_other.puuid = ANY(%s) 
+                      AND mp_other.puuid != mp_target.puuid
+                    GROUP BY mp_other.puuid;
+                """, (target_puuid, other_puuids))
+                for row in cursor.fetchall():
+                    familiar_data[row['puuid']] = dict(row)
+            except Exception as e:
+                pass 
+
         allies, enemies = [], []
         ally_m_total, enemy_m_total, ally_streaks, enemy_streaks = 0, 0, 0, 0
         base_url = "http://localhost:8000"
@@ -254,11 +277,17 @@ def get_player(name: str, tag: str):
 
                     raw_img = player_entry.get('profile_image_url')
                     if raw_img and str(raw_img).strip().lower() != "none":
-                        real_img = base_url + raw_img if raw_img.startswith('/') else raw_img
+                        raw_img = raw_img.replace('\\', '/').strip()
+                        if not raw_img.startswith('/'):
+                            raw_img = '/' + raw_img
+                        real_img = base_url + raw_img
                         
                     raw_logo = player_entry.get('team_logo_url')
                     if raw_logo and str(raw_logo).strip().lower() != "none":
-                        team_logo = base_url + raw_logo if raw_logo.startswith('/') else raw_logo
+                        raw_logo = raw_logo.replace('\\', '/').strip()
+                        if not raw_logo.startswith('/'):
+                            raw_logo = '/' + raw_logo
+                        team_logo = base_url + raw_logo
                         
                     lp_url = player_entry.get('leaguepedia_url')
                     if lp_url and str(lp_url).strip().lower() != "none":
@@ -278,17 +307,19 @@ def get_player(name: str, tag: str):
                 if player_entry:
                     cursor.execute("SELECT SUM(am.mastery_points) as db_mast FROM account_mastery am JOIN accounts a ON am.puuid = a.puuid WHERE a.player_id = %s AND a.puuid != %s AND am.champion_id = %s", (player_entry['player_id'], puuid, champ_id))
                     db_res = cursor.fetchone()
-                    if db_res and db_res['db_mast']: tot_mast += db_res['db_mast']
+                    
+                    # FIXED: Wrapped the database result in int()
+                    if db_res and db_res['db_mast']: tot_mast += int(db_res['db_mast'])
                 
                 tag_disp = tag_disp or (searcher_tag if puuid == target_puuid else p_streak)
                 if p_streak == "Winners Queue" and tot_mast > 200000: tag_disp = "YOU'RE COOKED"
-                # SECRET WEAPON: plays this champ rarely on this account, but is a monster on it overall
-                if cur_mast < 50000 and tot_mast > 500000: tag_disp = "SECRET WEAPON"
-                # THREAT supersedes SECRET WEAPON — 1.5M total = OTP territory regardless of account
+                
+                # --- UPDATED SECRET WEAPON LOGIC ---
+                if tot_mast >= 300000 and cur_mast <= (tot_mast * 0.3): tag_disp = "SECRET WEAPON"
+                
                 if tot_mast >= 1_500_000: tag_disp = "THREAT"
 
                 db_special_tag = player_entry.get('special_tag') if player_entry else None
-                # DEV and VIP are manually set in DB — they override all computed tags
                 if db_special_tag: tag_disp = db_special_tag
 
                 if p['teamId'] == searcher_team_id:
@@ -316,7 +347,8 @@ def get_player(name: str, tag: str):
                 "socials": socials_dict, "smurfs": smurfs_list,
                 "rank": rank_data["tier"], "lp": rank_data["lp"],
                 "current_mastery": cur_mast, "total_mastery": tot_mast, 
-                "tag": tag_disp, "side": "ally" if p['teamId'] == searcher_team_id else "enemy"
+                "tag": tag_disp, "side": "ally" if p['teamId'] == searcher_team_id else "enemy",
+                "familiar_stats": familiar_data.get(puuid) 
             }
             
             if p['teamId'] == searcher_team_id: allies.append(p_payload)

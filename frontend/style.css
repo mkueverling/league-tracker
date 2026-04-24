@@ -46,6 +46,26 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .card.unclickable { cursor: default; }
 .card.unclickable:hover { border-color: var(--border) !important; background: var(--card); transform: none; box-shadow: var(--shadow-card); z-index: 1; }
 
+/* --- FULL CARD BANNERS (PRO & DEV) --- */
+.effect-pro {
+    border-color: var(--gold) !important;
+    box-shadow: inset 0 0 15px rgba(241, 196, 15, 0.05), 0 0 10px rgba(241, 196, 15, 0.15) !important;
+}
+
+.ally-card.effect-the-dev  { animation: slideInLeft  0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards, devCardGlow 2.5s 0.8s infinite alternate !important; }
+.enemy-card.effect-the-dev { animation: slideInRight 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards, devCardGlow 2.5s 0.8s infinite alternate !important; }
+
+@keyframes devCardGlow {
+    0% { 
+        border-color: rgba(241, 196, 15, 0.6); 
+        box-shadow: inset 0 0 15px rgba(241, 196, 15, 0.1), 0 0 15px rgba(241, 196, 15, 0.2); 
+    }
+    100% { 
+        border-color: rgba(243, 156, 18, 1); 
+        box-shadow: inset 0 0 30px rgba(243, 156, 18, 0.2), 0 0 25px rgba(243, 156, 18, 0.4); 
+    }
+}
+
 .summary-card { height: clamp(45px, 6vh, 70px) !important; cursor: default; background: transparent !important; border: none !important; box-shadow: none !important; opacity: 1 !important; z-index: 10; animation: fadeIn 0.5s ease forwards; }
 .summary-card.ally-card::before { content: ''; position: absolute; top: 0; bottom: 0; right: 0; left: 36%; background: var(--search-bg); border: 1px dashed var(--border); border-left: 4px solid var(--blue); border-radius: 6px; box-shadow: var(--shadow-card); z-index: 0; transition: 0.2s; }
 .summary-card.enemy-card::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; right: 36%; background: var(--search-bg); border: 1px dashed var(--border); border-right: 4px solid var(--red); border-radius: 6px; box-shadow: var(--shadow-card); z-index: 0; transition: 0.2s; }
@@ -92,47 +112,61 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .pro-name-gold { color: var(--gold); font-size: 1.4rem; font-weight: 900; line-height: 1; text-transform: uppercase; text-shadow: var(--text-shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 .riot-id-subtext { font-size: 0.8rem; opacity: 0.6; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 
-.effect-the-dev {
-    border: 1px solid var(--gold) !important;
-    box-shadow: 0 0 15px rgba(241, 196, 15, 0.4), inset 0 0 20px rgba(241, 196, 15, 0.1) !important;
-    animation: devGlow 3s infinite alternate;
+/* --- THE DEV EXCLUSIVE ANIMATION --- */
+.identity-group-dev {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
+.enemy-card .identity-group-dev { align-items: flex-end; }
 
-@keyframes devGlow {
-    0% { box-shadow: 0 0 15px rgba(241, 196, 15, 0.3), inset 0 0 10px rgba(241, 196, 15, 0.1); }
-    100% { box-shadow: 0 0 25px rgba(241, 196, 15, 0.8), inset 0 0 30px rgba(241, 196, 15, 0.3); border-color: #fff; }
+.dev-name-animated {
+    font-size: 1.4rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 1;
+    text-shadow: var(--text-shadow);
+    background: linear-gradient(270deg, #f1c40f, #f39c12, #f1c40f);
+    background-size: 400% 400%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: DevTextShift 4s ease infinite;
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis;
+}
+@keyframes DevTextShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 
 /* --- TRUE MASTERY COLUMN (EMBROIDERED FLAIR BACKGROUND) --- */
 .mastery-group { 
-    position: relative; /* Setup for absolute background layer */
+    position: relative; 
     display: flex; flex-direction: column; justify-content: center; align-items: center; 
     flex: 0.8; padding: 0 1vw; border-left: 1px solid var(--border); 
-    z-index: 1; /* Establishes a stacking context so the image stays trapped behind the text */
+    z-index: 1; 
 }
 .enemy-card .mastery-group { border-right: 1px solid var(--border); border-left: none; }
 
-/* The subtly injected watermark background */
 .mastery-group::before {
     content: '';
     position: absolute;
     top: 50%; left: 50%;
-    transform: translate(-50%, -50%) scale(2); /* Fluidly scales it 100% bigger */
+    transform: translate(-50%, -50%) scale(2); 
     width: 100%; height: 100%;
     background-image: url('http://localhost:8000/images/miscellaneous/mastery_flair.png');
     background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
-    
-    /* Strips RGB to make it pure black, giving it a dark, indented "etched" look over the banner */
     filter: brightness(0); 
     opacity: 0.15; 
-    
-    z-index: -1; /* Pushes it firmly behind the text */
+    z-index: -1; 
     pointer-events: none;
 }
 
-/* Ensure the text floats above the background watermark */
 .mastery-label { position: relative; z-index: 1; font-size: clamp(0.6rem, 0.75vw, 0.85rem); color: var(--text-muted); font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; text-transform: uppercase; text-align: center; }
 .mastery-score { position: relative; z-index: 1; font-size: clamp(1.1rem, 1.5vw, 2rem); font-weight: 900; color: var(--text-main); text-shadow: var(--text-shadow); } 
 
@@ -141,12 +175,12 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .enemy-card .stats-group { border-right: none; border-left: 1px solid var(--border); text-align: left; }
 .stat-line { font-size: clamp(0.7rem, 0.9vw, 1.05rem); color: var(--text-muted); margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-highlight { color: var(--text-main); font-weight: 700; }
-.rank-icon { width: 30px; height: 30px; vertical-align: middle; margin-right: 6px; margin-top: -2px; object-fit: contain;} /* VASTLY INCREASED SIZE */
+.rank-icon { width: 30px; height: 30px; vertical-align: middle; margin-right: 6px; margin-top: -2px; object-fit: contain;} 
 
 .tags-group { display: flex; flex-direction: row; flex-wrap: wrap; align-content: center; gap: 6px; flex: 0.8; min-width: 0; padding: 0 1vw; }
 .enemy-card .tags-group { justify-content: flex-end; }
 
-.badge { padding: clamp(3px, 0.3vh, 4px) clamp(6px, 0.6vw, 10px); border-radius: 4px; font-size: clamp(0.65rem, 0.9vh, 0.9rem); font-weight: 800; text-transform: uppercase; width: fit-content; white-space: nowrap; display: inline-block; position: relative; overflow: hidden; }
+.badge { padding: clamp(3px, 0.3vh, 4px) clamp(6px, 0.6vw, 10px); border-radius: 4px; font-size: clamp(0.65rem, 0.9vh, 0.9rem); font-weight: 800; text-transform: uppercase; width: fit-content; white-space: nowrap; display: inline-block; position: relative; overflow: visible; }
 
 /* Green — positive streaks */
 .badge-positive { background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.4); box-shadow: 0 0 6px rgba(46, 204, 113, 0.15); }
@@ -157,23 +191,40 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 /* Neutral fallback */
 .badge-neutral { background: rgba(160, 160, 168, 0.12); color: #a0a0a8; border: 1px solid rgba(160, 160, 168, 0.25); }
 
+/* Special fallback (Familiar Face) */
+.badge-special { background: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.4); }
+
 /* Gold — PRO (in a team) */
 .badge-pro { background: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.5); box-shadow: 0 0 10px rgba(241, 196, 15, 0.15); }
 
 /* Purple — STREAMER / CONTENT CREATOR */
 .badge-creator { background: rgba(155, 89, 182, 0.18); color: #c39bd3; border: 1px solid rgba(155, 89, 182, 0.5); box-shadow: 0 0 8px rgba(155, 89, 182, 0.15); }
 
-/* Teal-to-violet gradient + slow pulse — SECRET WEAPON */
+/* Deep purple gradient + pulse — SECRET WEAPON */
 .badge-secret-weapon {
-    background: linear-gradient(135deg, rgba(26, 188, 156, 0.2) 0%, rgba(142, 68, 173, 0.25) 100%);
-    color: #a8e6cf;
-    border: 1px solid rgba(26, 188, 156, 0.5);
-    box-shadow: 0 0 10px rgba(26, 188, 156, 0.2);
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.2) 0%, rgba(108, 52, 131, 0.3) 100%);
+    color: #d2b4de;
+    border: 1px solid rgba(142, 68, 173, 0.6);
+    box-shadow: 0 0 12px rgba(142, 68, 173, 0.25);
     animation: secretPulse 3s ease-in-out infinite;
 }
 @keyframes secretPulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(26, 188, 156, 0.2); border-color: rgba(26, 188, 156, 0.5); }
-    50%       { box-shadow: 0 0 16px rgba(142, 68, 173, 0.45); border-color: rgba(142, 68, 173, 0.65); }
+    0%, 100% { box-shadow: 0 0 8px rgba(142, 68, 173, 0.25); border-color: rgba(142, 68, 173, 0.6); }
+    50%       { box-shadow: 0 0 18px rgba(155, 89, 182, 0.6); border-color: rgba(165, 105, 189, 0.9); }
+}
+
+/* Links the True Mastery number visually to the Secret Weapon badge */
+.secret-weapon-text {
+    background: linear-gradient(135deg, #d2b4de, #af7ac5, #8e44ad);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: textPulse 3s ease-in-out infinite;
+    text-shadow: none !important;
+}
+@keyframes textPulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.3); }
 }
 
 /* Red-to-orange gradient + heartbeat — THREAT */
@@ -187,6 +238,20 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 @keyframes threatBeat {
     0%, 100% { box-shadow: 0 0 8px rgba(231, 76, 60, 0.25); border-color: rgba(231, 76, 60, 0.6); }
     50%       { box-shadow: 0 0 18px rgba(231, 76, 60, 0.6); border-color: rgba(243, 156, 18, 0.8); }
+}
+
+/* Links the True Mastery number visually to the Threat badge */
+.threat-text {
+    background: linear-gradient(135deg, #ff8c69, #e74c3c, #f39c12);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: textThreatBeat 1.8s ease-in-out infinite;
+    text-shadow: none !important;
+}
+@keyframes textThreatBeat {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.3); }
 }
 
 /* Gold shimmer scan — THE DEV */
@@ -339,7 +404,7 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 /* --- TEAM ROSTER PANEL --- */
 .team-roster-panel {
     position: fixed;
-    right: calc(20vw + 15px); /* Positions it perfectly left of the 20vw sidebar */
+    right: calc(20vw + 15px);
     top: 90px;
     width: 320px;
     background: var(--panel-bg);
