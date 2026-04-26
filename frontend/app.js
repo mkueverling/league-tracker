@@ -40,6 +40,10 @@ async function loadDictionaries() {
         const verRes = await fetch("https://ddragon.leagueoflegends.com/api/versions.json");
         const versions = await verRes.json();
         patch = versions[0]; 
+        
+        // NEW: Update the badge text dynamically to show the real patch!
+        const patchBtnText = document.getElementById('patch-btn-text');
+        if (patchBtnText) patchBtnText.innerText = 'PATCH ' + patch;
 
         const champRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${patch}/data/en_US/champion.json`);
         const champData = await champRes.json();
@@ -114,7 +118,7 @@ function getAverageRank(team) {
         
         let mmr = 0;
         if (["master", "grandmaster", "challenger"].includes(t)) {
-            mmr = (7 * 400) + (parseInt(p.lp) || 0); // Master base starts at 2800
+            mmr = (7 * 400) + (parseInt(p.lp) || 0);
         } else {
             mmr = (tiers[t] * 400) + (parseInt(p.lp) || 0);
         }
@@ -250,7 +254,6 @@ function renderTeamSummary(teamArray, side, teamTags) {
     const sideTextHtml = `<div style="position: absolute; top: 0; bottom: 0; ${side === 'ally' ? 'left: 20px;' : 'right: 20px;'} display: flex; align-items: center; font-size: clamp(1.1rem, 1.5vw, 1.6rem); font-weight: 900; letter-spacing: 2px; color: ${sColor}; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">${sideText}</div>`;
     const spacer = `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-right: 0.75rem; opacity: 0; pointer-events: none;"><div style="width: 1.4rem;"></div><div style="width: 1.4rem;"></div></div>`;
     
-    // Team banner pops in last!
     return `<div class="card summary-card ${sideClass}" style="--card-delay: 2.2s;">
         ${sideTextHtml}
         <div class="row-content">
@@ -472,7 +475,24 @@ function render(p, index) {
 
 async function executeScan() {
     const rawQuery = document.getElementById('target').value.trim();
-    if(!rawQuery.includes('#')) return;
+    
+    // Safety check so users know they need the #EUW part!
+    if(!rawQuery.includes('#')) {
+        alert("Please include a Region Tag! (Example: Agurin#EUW)");
+        return;
+    }
+
+    // Trigger the UI transition
+    document.body.classList.add('has-searched');
+    
+    // Hide the shop if it's currently open
+    const shopPage = document.getElementById('shop-page');
+    if (shopPage) shopPage.style.display = 'none';
+    
+    // Ensure live UI elements are visible
+    document.querySelectorAll('.live-ui-element').forEach(el => {
+        el.style.display = '';
+    });
     
     const [name, tag] = rawQuery.split('#').map(s => s.trim());
     searchIcon.style.display = 'none'; scanLoader.style.display = 'block';
@@ -489,7 +509,6 @@ async function executeScan() {
 
         let currentSeconds = Math.max(0, liveData.game_length || 0);
 
-        // Map game queue IDs to readable names
         const queueMap = {
             400: "Normal Draft",
             420: "Ranked Solo/Duo",
@@ -589,8 +608,7 @@ async function executeScan() {
                 .map(p => championMap[p.championId])
                 .filter(Boolean)
         )];
-        const patchBtn = document.getElementById('patch-btn');
-        if (patchBtn) patchBtn.style.display = 'inline-flex';
+        
     }catch (e) {
         document.getElementById('intel-text').innerHTML = `<span class='intel-accent' style='color:var(--red);'>ERROR:</span> ${e.message}`;
         document.getElementById('intel-banner').style.display = 'flex';
@@ -725,7 +743,8 @@ async function fetchAndRenderMatches(offset) {
             </div>`;
         }).join('');
 
-        const loadBtn = `<button onclick="loadMoreMatches()" style="width:100%; padding:12px; background:var(--search-bg); border:1px solid var(--border); color:var(--text-main); font-weight:bold; border-radius:6px; cursor:pointer; margin-top:10px;">Load 5 More Games</button>`;
+        // Find this line inside fetchAndRenderMatches:
+const loadBtn = `<button onclick="loadMoreMatches()" style="width:100%; padding:12px; background:var(--search-bg); border:1px solid var(--border); color:var(--text-main); font-weight:500; border-radius:6px; cursor:pointer; margin-top:10px; transition: 0.2s;" onmouseover="this.style.borderColor='var(--blue)'; this.style.color='var(--blue)';" onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-main)';">Load 5 More Games</button>`;
         if (offset === 0) loadingDiv.innerHTML = `<div class="recent-games-header">Recent Games</div>` + historyHtml + loadBtn;
         else { loadingDiv.querySelector('button').remove(); loadingDiv.innerHTML += historyHtml + loadBtn; }
     } catch (error) { loadingDiv.innerHTML = `<div style="color: var(--red); text-align: center; margin-top: 50px;">Failed to load.</div>`; }
@@ -819,7 +838,7 @@ function getAbilityIconUrl(champDetail, slot) {
 
 async function openPatchPanel() {
     // Close right panel if open
-    hPanel.classList.remove('active');
+    if (hPanel && hPanel.classList.contains('active')) hPanel.classList.remove('active');
 
     patchPanel.classList.add('active');
     const loadingDiv = document.getElementById('patch-loading');
@@ -939,11 +958,71 @@ function closeTeamRoster() {
     panel.classList.remove('active'); setTimeout(() => panel.style.display = 'none', 300);
 }
 
+
+// ── SHOP NAVIGATION ────────────────────────────────────────────────────────────
+
+function openShop() {
+    // Hide the landing page if it's currently active
+    const landing = document.getElementById('landing-page');
+    if (landing) landing.style.display = 'none';
+    
+    // Hide all live arena elements if they are currently active
+    document.querySelectorAll('.live-ui-element').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    // Close side panels if they are open
+    if (hPanel && hPanel.classList.contains('active')) hPanel.classList.remove('active');
+    if (patchPanel && patchPanel.classList.contains('active')) closePatchPanel();
+    const rosterPanel = document.getElementById('team-roster-panel');
+    if (rosterPanel && rosterPanel.classList.contains('active')) closeTeamRoster();
+    
+    // Show the shop
+    const shopPage = document.getElementById('shop-page');
+    if (shopPage) shopPage.style.display = 'flex';
+}
+
+function closeShop() {
+    const shopPage = document.getElementById('shop-page');
+    if (shopPage) shopPage.style.display = 'none';
+    
+    // Check if the user was looking at a live game or the landing page
+    if (document.body.classList.contains('has-searched')) {
+        // Bring back the live arena
+        document.querySelectorAll('.live-ui-element').forEach(el => {
+            el.style.display = '';
+        });
+    } else {
+        // Bring back the landing page
+        const landing = document.getElementById('landing-page');
+        if (landing) landing.style.display = 'block';
+    }
+}
+
+
+// ── EVENT LISTENERS ──────────────────────────────────────────────────────────
+
+// Map the big landing search bar to the top search bar
+const landingTarget = document.getElementById('landing-target');
+if (landingTarget) {
+    landingTarget.addEventListener('keypress', e => { 
+        if (e.key === 'Enter') {
+            document.getElementById('target').value = e.target.value;
+            executeScan();
+        } 
+    });
+}
+
 document.addEventListener('click', (e) => { 
-    if (hPanel.classList.contains('active') && !hPanel.contains(e.target) && !e.target.closest('.card') && !e.target.closest('.team-roster-panel')) hPanel.classList.remove('active');
-    if (patchPanel.classList.contains('active') && !patchPanel.contains(e.target) && !e.target.closest('#patch-btn')) closePatchPanel();
-    if (document.getElementById('team-roster-panel').classList.contains('active') && !document.getElementById('team-roster-panel').contains(e.target) && !e.target.closest('.clickable-team')) closeTeamRoster();
+    if (hPanel && hPanel.classList.contains('active') && !hPanel.contains(e.target) && !e.target.closest('.card') && !e.target.closest('.team-roster-panel')) hPanel.classList.remove('active');
+    if (patchPanel && patchPanel.classList.contains('active') && !patchPanel.contains(e.target) && !e.target.closest('.patch-version-badge')) closePatchPanel();
+    
+    const rosterPanel = document.getElementById('team-roster-panel');
+    if (rosterPanel && rosterPanel.classList.contains('active') && !rosterPanel.contains(e.target) && !e.target.closest('.clickable-team')) closeTeamRoster();
 });
 
 document.getElementById('target').addEventListener('keypress', e => { if (e.key === 'Enter') executeScan(); });
-document.getElementById('close-panel-btn').addEventListener('click', () => { hPanel.classList.remove('active'); closeTeamRoster(); });
+document.getElementById('close-panel-btn').addEventListener('click', () => { 
+    if (hPanel) hPanel.classList.remove('active'); 
+    closeTeamRoster(); 
+});

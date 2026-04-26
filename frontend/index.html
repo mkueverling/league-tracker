@@ -7,7 +7,7 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800;900&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="style.css">
 </head>
@@ -15,20 +15,16 @@
 
 <header class="top-header">
     <div class="header-left">
-        <div class="logo">PRO TRACKER</div>
+        <div class="logo"><span style="color: var(--gold);">PRO</span> TRACKER</div>
         <div class="region-selector">
             <span class="active">EUW</span>
             <span class="disabled tooltip-box" data-tooltip="Not currently supported">NA</span>
             <span class="disabled tooltip-box" data-tooltip="Not currently supported">KR</span>
         </div>
     </div>
+    
     <div class="header-right">
-        <button class="share-btn" id="anim-toggle-btn" onclick="toggleAnimations()" style="margin-right: 8px;">ANIM ON</button>
-        <button class="share-btn" id="patch-btn" onclick="togglePatchPanel()" style="margin-right: 8px; display: none;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px; vertical-align: middle;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-            PATCH
-        </button>
-        <div class="search-area">
+        <div class="search-area top-search-area">
             <div class="search-container" id="search-container">
                 <input type="text" id="target" placeholder="TARGET#TAG" autocomplete="off">
                 <div id="search-icon" class="search-icon">
@@ -37,28 +33,139 @@
                 <div id="scan-loader" class="scan-loader"></div>
             </div>
         </div>
-        <button class="share-btn" onclick="copyLobbyLink(this)">SHARE</button>
+
+        <button class="share-btn" onclick="openShop()" style="color: var(--text-main); border-color: var(--gold);">
+            COMMUNITY HUB
+        </button>
+        
+        <button class="share-btn" id="anim-toggle-btn" onclick="toggleAnimations()">
+            ANIMATIONS
+        </button>
     </div>
 </header>
 
-<div class="top-zone">
+<div id="landing-page" class="landing-page">
+    <div class="mock-lobby-bg"></div>
+    <div class="landing-content">
+        <div class="landing-interactive-area">
+            <div class="landing-text-block">
+                <h1 class="landing-title">PRO TRACKER</h1>
+                <p class="landing-subtitle">CHECK IF YOU'RE PLAYING AGAINST A PRO.<br>SEE TRUE MASTERY SCORES ACROSS ALL KNOWN ALT ACCOUNTS.</p>
+            </div>
+            <div class="search-container landing-search-container">
+                <input type="text" id="landing-target" placeholder="Enter Riot ID (e.g. Agurin#EUW)" autocomplete="off" spellcheck="false">
+                <div class="search-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="shop-page" class="shop-page" style="display: none;">
+    <div class="shop-close-btn" onclick="closeShop()">✕</div>
+    <div class="shop-header">
+        <h1 style="font-size: 3rem; color: var(--gold); margin: 0; text-shadow: var(--text-shadow); letter-spacing: 2px;">COMMUNITY HUB</h1>
+        <p style="color: var(--text-muted); font-size: 1.1rem; margin-top: 10px; font-weight: bold; max-width: 600px; margin-left: auto; margin-right: auto;">Customize your banner, express yourself with a personal mantra, and verify your alt accounts for everyone in the network to see.</p>
+    </div>
+
+    <div class="shop-grid">
+        <div class="shop-item">
+            <div class="card ally-card effect-infernal" style="height: 100px; opacity: 1; transform: none; animation: infernalGlow 3s infinite !important; cursor: default;">
+                <div class="card-bg-wrapper"><div class="champ-splash" style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/centered/Brand_0.jpg')"></div></div>
+                <div class="row-content" style="padding-left: 20px;">
+                    <div class="identity-group"><div class="riot-id-wrapper"><span class="main-name" style="color: #ff5722; text-shadow: 0 0 8px rgba(255,87,34,0.6);">Infernal</span></div></div>
+                </div>
+            </div>
+            <div class="shop-item-info">
+                <h3>Infernal Soul</h3>
+                <p>A scorching, animated magma border.</p>
+                <button class="shop-buy-btn">LOGIN WITH RIOT</button>
+            </div>
+        </div>
+
+        <div class="shop-item">
+            <div class="card ally-card effect-celestial" style="height: 100px; opacity: 1; transform: none; animation: celestialGlow 4s infinite !important; cursor: default;">
+                <div class="card-bg-wrapper"><div class="champ-splash" style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/centered/Kayle_0.jpg')"></div></div>
+                <div class="row-content" style="padding-left: 20px;">
+                    <div class="identity-group"><div class="riot-id-wrapper"><span class="main-name" style="color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.8);">Celestial</span></div></div>
+                </div>
+            </div>
+            <div class="shop-item-info">
+                <h3>Celestial Aspect</h3>
+                <p>A pure, radiant white-gold holy glow.</p>
+                <button class="shop-buy-btn">LOGIN WITH RIOT</button>
+            </div>
+        </div>
+
+        <div class="shop-item">
+            <div class="card ally-card effect-void" style="height: 100px; opacity: 1; transform: none; animation: voidGlow 4s infinite !important; cursor: default;">
+                <div class="card-bg-wrapper"><div class="champ-splash" style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/centered/Malzahar_0.jpg')"></div></div>
+                <div class="row-content" style="padding-left: 20px;">
+                    <div class="identity-group"><div class="riot-id-wrapper"><span class="main-name" style="color: #b072ff; text-shadow: 0 0 10px rgba(176,114,255,0.8);">The Void</span></div></div>
+                </div>
+            </div>
+            <div class="shop-item-info">
+                <h3>Void Corruption</h3>
+                <p>A deep, pulsing dark matter aura.</p>
+                <button class="shop-buy-btn">LOGIN WITH RIOT</button>
+            </div>
+        </div>
+        
+        <div class="shop-item">
+            <div style="height: 100px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--border); border-radius: 6px; background: rgba(0,0,0,0.2);">
+                <div class="mantra-text" style="font-size: 1.2rem;">— "Built different."</div>
+            </div>
+            <div class="shop-item-info">
+                <h3>Personal Mantra</h3>
+                <p>Add a custom quote directly to your player card.</p>
+                <button class="shop-buy-btn">LOGIN WITH RIOT</button>
+            </div>
+        </div>
+
+        <div class="shop-item">
+            <div style="height: 100px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px dashed var(--border); border-radius: 6px; background: rgba(0,0,0,0.2);">
+                <div class="badge badge-neutral">Main Account</div>
+                <div class="badge badge-neutral">Smurf 1</div>
+            </div>
+            <div class="shop-item-info">
+                <h3>Linked Accounts</h3>
+                <p>Verify and connect your alt accounts to pool your True Mastery.</p>
+                <button class="shop-buy-btn">LOGIN WITH RIOT</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="top-zone live-ui-element">
     <div class="intel-banner-container">
         <div class="intel-banner" id="intel-banner"><span class="intel-text" id="intel-text"></span></div>
     </div>
 </div>
 
-<div class="arena" id="arena">
-    <div id="left-team" class="team-box"></div>
-    <div id="right-team" class="team-box"></div>
+<div class="arena live-ui-element" id="arena">
+    <div class="team-column" style="position: relative;">
+        <button class="patch-version-badge" id="patch-btn" onclick="togglePatchPanel()">
+            <div class="patch-icon-wrapper">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            </div>
+            <span id="patch-btn-text">PATCH NOTES</span>
+        </button>
+        
+        <div id="left-team" class="team-box"></div>
+    </div>
+
+    <div class="team-column">
+        <div id="right-team" class="team-box"></div>
+    </div>
 </div>
 
-<div class="bottom-zone"></div>
+<div class="bottom-zone live-ui-element"></div>
 
-<footer class="legal-footer">
+<footer class="legal-footer live-ui-element">
     Pro Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.
 </footer>
 
-<!-- RIGHT PANEL: Player history -->
 <div id="history-panel" class="history-panel">
     <img id="panel-pro-img" class="panel-pro-img" style="display:none;" onerror="this.style.display='none'">
     <div class="sidebar-content">
@@ -75,7 +182,6 @@
     </div>
 </div>
 
-<!-- LEFT PANEL: Patch notes -->
 <div id="patch-panel" class="patch-panel">
     <div class="sidebar-content">
         <span class="close-btn" id="close-patch-btn" onclick="closePatchPanel()">✕ CLOSE</span>
