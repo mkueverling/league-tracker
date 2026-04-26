@@ -383,6 +383,7 @@ def get_player(name: str, tag: str):
         return {
             "status": "live",
             "game_length": game_data.get('gameLength', 0),
+            "queue_id": game_data.get('gameQueueConfigId', 0),
             "allies": assign_roles_and_sort(allies), 
             "enemies": assign_roles_and_sort(enemies), 
             "ff_angle": (enemy_m_total >= (ally_m_total * 2) and enemy_streaks >= (ally_streaks * 2) and enemy_streaks > 0),

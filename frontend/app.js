@@ -71,10 +71,68 @@ function copyLobbyLink(btn) {
     setTimeout(() => { btn.innerHTML = "SHARE"; btn.style.color = ""; btn.style.borderColor = ""; }, 2000);
 }
 
+function toggleAnimations() {
+    const body = document.body;
+    body.classList.toggle('disable-animations');
+    const btn = document.getElementById('anim-toggle-btn');
+    if (body.classList.contains('disable-animations')) {
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+            ANIM OFF
+        `;
+        btn.style.color = "var(--red)";
+        btn.style.borderColor = "var(--red)";
+    } else {
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+            ANIM ON
+        `;
+        btn.style.color = "";
+        btn.style.borderColor = "";
+    }
+}
+
 function formatMastery(points) {
     if (!points) return "0k";
     if (points >= 1000000) return (points / 1000000).toFixed(1) + "M";
     return Math.floor(points / 1000) + "k";
+}
+
+function getAverageRank(team) {
+    const tiers = { "unranked": -1, "iron": 0, "bronze": 1, "silver": 2, "gold": 3, "platinum": 4, "emerald": 5, "diamond": 6 };
+    let totalMmr = 0; 
+    let count = 0;
+    
+    team.forEach(p => {
+        if (p.is_streamer) return;
+        let t = (p.rank || "unranked").toLowerCase();
+        if (t === "unranked") return;
+        
+        let mmr = 0;
+        if (["master", "grandmaster", "challenger"].includes(t)) {
+            mmr = (7 * 400) + (parseInt(p.lp) || 0); // Master base starts at 2800
+        } else {
+            mmr = (tiers[t] * 400) + (parseInt(p.lp) || 0);
+        }
+        totalMmr += mmr;
+        count++;
+    });
+    
+    if (count === 0) return { tier: "UNRANKED", lp: 0 };
+    const avg = totalMmr / count;
+    
+    if (avg >= 2800) { 
+        const apexLp = Math.round(avg - 2800);
+        let apexTier = "MASTER";
+        if (apexLp >= 2000) apexTier = "CHALLENGER";
+        else if (apexLp >= 1466) apexTier = "GRANDMASTER";
+        return { tier: apexTier, lp: apexLp };
+    } else { 
+        const revTiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"];
+        const tierIdx = Math.floor(avg / 400);
+        const lp = Math.round(avg % 400);
+        return { tier: revTiers[tierIdx] || "UNRANKED", lp: lp };
+    }
 }
 
 function getBadgeClass(tag) {
@@ -93,7 +151,6 @@ function getBadgeClass(tag) {
 
 function getTagTooltip(tag) {
     const tips = {
-        'PRO PLAYER':       'Active professional player on a roster',
         'STREAMER':         'Streams live on Twitch',
         'CONTENT CREATOR':  'YouTube content creator',
         'OBSESSED':         '3M+ mastery — Needs to touch grass immediately',
@@ -125,7 +182,13 @@ function computeTags(p) {
     const hasTwitch  = p.socials && p.socials.Twitch;
     const hasYouTube = p.socials && p.socials.YouTube;
 
-    if (p.team) tags.push('PRO PLAYER');
+    if (p.team) {
+        let proTip = `Professional player for <span style="color: var(--gold); font-weight: 900;">${p.team}</span>`;
+        if (p.team_logo) {
+            proTip += ` <img src="${p.team_logo}" style="height: 14px; vertical-align: middle; border-radius: 2px; margin-left: 4px;">`;
+        }
+        tags.push({ tag: 'PRO PLAYER', tip: proTip });
+    }
 
     if (hasTwitch && !hasYouTube) tags.push('STREAMER');
     if (hasYouTube) tags.push('CONTENT CREATOR');
@@ -150,25 +213,52 @@ function computeTags(p) {
 function renderTeamSummary(teamArray, side, teamTags) {
     let totalMastery = 0;
     teamArray.forEach(p => totalMastery += p.total_mastery || 0);
-    const sideClass = side === 'ally' ? 'ally-card' : 'enemy-card';
-    let tagHtml = teamTags.map(tag => {
-        const tip = getTagTooltip(tag);
-        const cls = `badge ${getBadgeClass(tag)}${tip ? ' tooltip-box' : ''}`;
-        const tipAttr = tip ? ` data-tooltip="${tip}"` : '';
-        return `<div class="${cls}"${tipAttr}>${tag}</div>`;
-    }).join('');
+    const avgRank = getAverageRank(teamArray);
     
-    // --- NEW: Box-Model Flex Track Wrapper ---
-    // Injecting summary-box-* classes directly onto the flex tracks forces the dashed 
-    // box to permanently align with the player card columns, ignoring scaling issues.
-    return `<div class="card summary-card ${sideClass}">
+    const sideClass = side === 'ally' ? 'ally-card' : 'enemy-card';
+    const sideText = side === 'ally' ? 'BLUE SIDE' : 'RED SIDE';
+    const sColor = side === 'ally' ? 'var(--blue)' : 'var(--red)';
+    
+    let tagHtml = teamTags.map(item => {
+        const tag = typeof item === 'string' ? item : item.tag;
+        const tip = (typeof item === 'object' && item.tip) ? item.tip : getTagTooltip(tag);
+        const tipHtml = tip ? `<div class="tooltip-content">${tip}</div>` : '';
+        const cls = `badge ${getBadgeClass(tag)}${tip ? ' html-tooltip-box' : ''}`;
+        return `<div class="${cls}">${tag}${tipHtml}</div>`;
+    }).join('');
+
+    const rankPngUrl = `http://localhost:8000/images/ranks/${avgRank.tier.toLowerCase()}.png`;
+    const showLp = ["MASTER", "GRANDMASTER", "CHALLENGER"].includes(avgRank.tier);
+    
+    const statsHtml = avgRank.tier === "UNRANKED" 
+        ? `<div style="display: flex; flex-direction: column; align-items: center; width: 100%; gap: 2px;">
+             <div class="mastery-label" style="color: var(--text-muted); font-size: clamp(0.6rem, 0.75vw, 0.85rem);">AVG RANK</div>
+             <div class="mastery-score" style="font-size: clamp(0.95rem, 1.2vw, 1.2rem); color: var(--text-main); white-space: nowrap; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--text-shadow);">UNRANKED</div>
+           </div>`
+        : `<div style="display: flex; flex-direction: column; align-items: center; width: 100%; gap: 4px;">
+               <div class="mastery-label" style="color: var(--text-muted); font-size: clamp(0.6rem, 0.75vw, 0.85rem);">AVG RANK</div>
+               <div style="display: flex; align-items: center; gap: 8px;">
+                   <img src="${rankPngUrl}" style="height: 32px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));" title="${avgRank.tier}">
+                   ${showLp ? `<span style="font-size: clamp(0.95rem, 1.2vw, 1.2rem); color: var(--text-main); white-space: nowrap; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--text-shadow);">${avgRank.lp} LP</span>` : ''}
+               </div>
+           </div>`;
+
+    const sideTextHtml = `<div style="position: absolute; top: 0; bottom: 0; ${side === 'ally' ? 'left: 20px;' : 'right: 20px;'} display: flex; align-items: center; font-size: clamp(1.1rem, 1.5vw, 1.6rem); font-weight: 900; letter-spacing: 2px; color: ${sColor}; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">${sideText}</div>`;
+    const spacer = `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-right: 0.75rem; opacity: 0; pointer-events: none;"><div style="width: 1.4rem;"></div><div style="width: 1.4rem;"></div></div>`;
+    
+    // Team banner pops in last!
+    return `<div class="card summary-card ${sideClass}" style="--card-delay: 2.2s;">
+        ${sideTextHtml}
         <div class="row-content">
+            ${spacer}
             <div class="identity-group"></div>
-            <div class="mastery-group summary-box-left">
-                <div class="mastery-label" style="color: var(--gold);">TEAM MASTERY</div>
-                <div class="mastery-score">${formatMastery(totalMastery)}</div>
+            <div class="mastery-group summary-box-left" style="gap: 2px;">
+                <div class="mastery-label" style="color: var(--text-muted); font-size: clamp(0.6rem, 0.75vw, 0.85rem);">TEAM MASTERY</div>
+                <div class="mastery-score" style="font-size: clamp(0.95rem, 1.2vw, 1.2rem); color: var(--text-main); white-space: nowrap; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--text-shadow);">${formatMastery(totalMastery)}</div>
             </div>
-            <div class="stats-group summary-box-mid"></div>
+            <div class="stats-group summary-box-mid" style="align-items: center;">
+                ${statsHtml}
+            </div>
             <div class="tags-group summary-box-right">${tagHtml}</div>
         </div>
     </div>`;
@@ -178,15 +268,23 @@ function render(p, index) {
     const champName = championMap[p.championId] || "Unknown";
     const splashImg = `https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${champName}_0.jpg`;
     const clickAction = p.is_streamer ? "" : `onclick='openHistory(${JSON.stringify(p).replace(/'/g, "&#39;")})'`;
-    const searchInput = document.getElementById('target').value.trim().toLowerCase();
+    
+    const rawQuery = document.getElementById('target').value.trim();
+    const [sName, sTag] = rawQuery.includes('#') ? rawQuery.split('#').map(s => s.trim()) : ["", ""];
+    const searchInput = `${sName}#${sTag}`.toLowerCase();
     const isTarget = p.riotId.toLowerCase() === searchInput;
 
+    const animDelay = isTarget ? 0 : 1.2 + (index * 0.15);
+
     const isDev = p.tag === 'THE DEV';
+    const isVip = p.tag === 'VIP' || p.is_vip;
     let cardEffectClass = '';
     
     if (isDev) {
         cardEffectClass = 'effect-the-dev';
-    } else if (p.is_pro || p.is_creator) {
+    } else if (isVip) {
+        cardEffectClass = 'effect-vip';
+    } else if (p.is_pro || p.team) { 
         cardEffectClass = 'effect-pro';
     }
 
@@ -217,14 +315,15 @@ function render(p, index) {
 
     if (p.is_streamer && !isTarget) {
         return `
-        <div class="card ${p.side}-card unclickable streamer-mode-card" style="position: relative; animation-delay: ${index * 0.15}s;">
+        <div class="card ${p.side}-card unclickable streamer-mode-card" style="position: relative; --card-delay: ${animDelay}s;">
             ${roleBadgeHtml}
             <div class="card-bg-wrapper"><div class="champ-splash streamer-splash" style="background-image: url('${splashImg}')"></div></div>
             <div class="row-content">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-right: 0.75rem; opacity: 0; pointer-events: none;"><div style="width: 1.4rem;"></div><div style="width: 1.4rem;"></div></div>
                 <div class="identity-group">
                     <div class="main-name" style="color: #55555e; font-style: italic;">Streamer mode</div>
                 </div>
-                <div class="mastery-group"></div>
+                <div class="mastery-group" style="border-left: 0.06rem solid rgba(255, 255, 255, 0.08); border-right: 0.06rem solid rgba(255, 255, 255, 0.08);"></div>
                 <div class="stats-group"></div>
                 <div class="tags-group">
                     <div class="badge badge-neutral tooltip-box" data-tooltip="Streamer mode active — identity hidden by Riot">INSECURE</div>
@@ -246,7 +345,16 @@ function render(p, index) {
                 ${mantraHtml}
             </div>
         `;
-    } else if (p.is_pro || p.is_creator) {
+    } else if (isVip) {
+        identityHtml = `
+            <div class="identity-group-vip">
+                <div class="vip-name-animated">${p.known_name || p.riotId.split('#')[0]}</div>
+                <div class="riot-id-subtext">${p.riotId}</div>
+                ${rankHtml}
+                ${mantraHtml}
+            </div>
+        `;
+    } else if (p.is_pro || p.team) { 
         identityHtml = `
             <div class="identity-group-pro">
                 <div class="pro-name-gold">${p.known_name || p.riotId.split('#')[0]}</div>
@@ -270,9 +378,10 @@ function render(p, index) {
         statsHtml = `<div class="stat-line" style="color: #7b7a8e; font-weight: 800; font-size: 0.9rem; text-transform: uppercase;">Unranked</div>`;
     } else {
         const rankPngUrl = `http://localhost:8000/images/ranks/${p.rank.toLowerCase()}.png`;
+        
         statsHtml = `
             <div style="position: relative; display: flex; flex-direction: column; justify-content: center; height: 100%; width: 100%;">
-                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.15; filter: grayscale(100%) brightness(0.1); transform: scale(1.5); background-image: url('${rankPngUrl}'); background-size: contain; background-position: center; background-repeat: no-repeat; pointer-events: none; z-index: 0;"></div>
+                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.15; filter: grayscale(100%) brightness(0.1); transform: scale(2); background-image: url('${rankPngUrl}'); background-size: contain; background-position: center; background-repeat: no-repeat; pointer-events: none; z-index: 0;"></div>
                 <div style="position: relative; z-index: 1;">
                     <div class="stat-line stat-highlight" style="margin-bottom: 0.25rem; font-size: 0.95rem;">
                         ${p.rank.toUpperCase()} <span class="stat-highlight">${p.lp || 0} LP</span>
@@ -287,24 +396,31 @@ function render(p, index) {
     const computedTagList = computeTags(p);
     
     let masteryScoreClass = 'mastery-score';
+    let masteryLabelClass = 'mastery-label';
+    
     if (computedTagList.includes('OBSESSED') || p.tag === 'OBSESSED') {
         masteryScoreClass += ' obsessed-text';
+        masteryLabelClass += ' obsessed-text';
     } else if (computedTagList.includes('CREATURE') || p.tag === 'CREATURE') {
         masteryScoreClass += ' creature-text';
+        masteryLabelClass += ' creature-text';
     } else if (computedTagList.includes('THREAT') || p.tag === 'THREAT') {
         masteryScoreClass += ' threat-text';
+        masteryLabelClass += ' threat-text';
     } else if (computedTagList.includes('SECRET WEAPON') || p.tag === 'SECRET WEAPON') {
         masteryScoreClass += ' secret-weapon-text';
+        masteryLabelClass += ' secret-weapon-text';
     }
 
     const hasHiddenMastery = (p.total_mastery || 0) > (p.current_mastery || 0);
     const masteryLabelStyle = hasHiddenMastery ? 'color: var(--gold); text-shadow: 0 0 8px rgba(241, 196, 15, 0.4);' : '';
 
-    let tagsHtml = computedTagList.map(tag => {
-        const tip = getTagTooltip(tag);
-        const cls = `badge ${getBadgeClass(tag)}${tip ? ' tooltip-box' : ''}`;
-        const tipAttr = tip ? ` data-tooltip="${tip}"` : '';
-        return `<div class="${cls}"${tipAttr}>${tag}</div>`;
+    let tagsHtml = computedTagList.map(item => {
+        const tag = typeof item === 'string' ? item : item.tag;
+        const tip = (typeof item === 'object' && item.tip) ? item.tip : getTagTooltip(tag);
+        const tipHtml = tip ? `<div class="tooltip-content">${tip}</div>` : '';
+        const cls = `badge ${getBadgeClass(tag)}${tip ? ' html-tooltip-box' : ''}`;
+        return `<div class="${cls}">${tag}${tipHtml}</div>`;
     }).join('');
 
     let familiarTabHtml = '';
@@ -333,7 +449,7 @@ function render(p, index) {
     }
 
     return `
-        <div class="card ${p.side}-card ${cardEffectClass}" style="position: relative; animation-delay: ${index * 0.15}s;" ${clickAction}>
+        <div class="card ${p.side}-card ${cardEffectClass}" style="position: relative; --card-delay: ${animDelay}s;" ${clickAction}>
             ${familiarTabHtml}
             ${roleBadgeHtml}
             <div class="card-bg-wrapper"><div class="champ-splash" style="background-image: url('${splashImg}')"></div></div>
@@ -341,7 +457,7 @@ function render(p, index) {
                 ${loadoutsHtml}
                 <div class="identity-group">${identityHtml}</div>
                 <div class="mastery-group tooltip-box" style="border-left: 0.06rem solid rgba(255, 255, 255, 0.08); border-right: 0.06rem solid rgba(255, 255, 255, 0.08);" data-tooltip="${formatMastery(p.current_mastery)} on this account, ${formatMastery(p.total_mastery)} total across all connected accounts.">
-                    <div class="mastery-label" style="${masteryLabelStyle}">True Mastery</div>
+                    <div class="${masteryLabelClass}" style="${masteryLabelStyle}">True Mastery</div>
                     <div class="${masteryScoreClass}">${formatMastery(p.total_mastery)}</div>
                 </div>
                 <div class="stats-group">${statsHtml}</div>
@@ -369,13 +485,28 @@ async function executeScan() {
 
         let currentSeconds = Math.max(0, liveData.game_length || 0);
 
+        // Map game queue IDs to readable names
+        const queueMap = {
+            400: "Normal Draft",
+            420: "Ranked Solo/Duo",
+            430: "Normal Blind",
+            440: "Ranked Flex",
+            450: "ARAM",
+            490: "Quickplay",
+            700: "Clash",
+            1700: "Arena"
+        };
+
+        const qId = liveData.queue_id;
+        const qName = queueMap[qId] || (qId === 0 ? "Custom Game" : "Live Game");
+
         const updateBanner = (seconds) => {
             const liveMinutes = Math.floor(seconds / 60);
             const liveSeconds = seconds % 60;
             const liveDurationStr = `${liveMinutes}:${liveSeconds.toString().padStart(2, '0')}`;
 
             document.getElementById('intel-text').innerHTML = `
-                <span class='intel-accent'>LIVE GAME:</span> 
+                <span class='intel-accent'>${qName.toUpperCase()}:</span> 
                 Match in progress — <span style="color: var(--blue); font-weight: 800;">${liveDurationStr}</span>
             `;
         };
@@ -388,11 +519,45 @@ async function executeScan() {
             updateBanner(currentSeconds);
         }, 1000);
 
+        const roleOrder = { "top": 1, "jungle": 2, "mid": 3, "bot": 4, "adc": 4, "support": 5, "utility": 5 };
+        const sortTeam = (team) => team.sort((a, b) => {
+            const rA = (a.guessed_role || "fill").toLowerCase();
+            const rB = (b.guessed_role || "fill").toLowerCase();
+            return (roleOrder[rA] || 99) - (roleOrder[rB] || 99);
+        });
+        
+        liveData.allies = sortTeam(liveData.allies);
+        liveData.enemies = sortTeam(liveData.enemies);
+
         let allySummaryTags = [];
         let enemySummaryTags = [];
 
-        if (liveData.ally_synergy) allySummaryTags.push("HIGH SYNERGY");
-        if (liveData.enemy_synergy) enemySummaryTags.push("HIGH SYNERGY");
+        const getSynergyDetails = (teamList) => {
+            let teamMap = {};
+            teamList.forEach(p => {
+                if (p.team) {
+                    if (!teamMap[p.team]) teamMap[p.team] = [];
+                    teamMap[p.team].push(`<span style="color: var(--gold); font-weight: 900;">${p.known_name || p.riotId.split('#')[0]}</span>`);
+                }
+            });
+            let synTips = [];
+            for (let t in teamMap) {
+                if (teamMap[t].length > 1) {
+                    let players = teamMap[t];
+                    let text = players.length > 2 
+                        ? players.slice(0, -1).join(', ') + ' & ' + players[players.length - 1] 
+                        : players.join(' & ');
+                    synTips.push(`${text} are on <span style="color: var(--gold); font-weight: 900;">${t}</span>`);
+                }
+            }
+            return synTips.length > 0 ? synTips.join('<br><br>') : null;
+        };
+
+        const allySynergyTip = getSynergyDetails(liveData.allies);
+        if (allySynergyTip) allySummaryTags.push({tag: "HIGH SYNERGY", tip: allySynergyTip});
+
+        const enemySynergyTip = getSynergyDetails(liveData.enemies);
+        if (enemySynergyTip) enemySummaryTags.push({tag: "HIGH SYNERGY", tip: enemySynergyTip});
 
         const getNormMast = (team) => {
             let t = 0, k = 0;
@@ -559,10 +724,19 @@ function loadMoreMatches() {
 
 async function toggleBuildPath(cardElem, matchId, puuid, runesEncoded) {
     const container = cardElem.querySelector('.build-path-container');
-    if (container.style.display === 'block') {
-        container.style.display = 'none'; cardElem.classList.remove('expanded'); return;
+    
+    if (cardElem.classList.contains('expanded')) {
+        container.classList.remove('show');
+        cardElem.classList.remove('expanded'); 
+        setTimeout(() => { if(!cardElem.classList.contains('expanded')) container.style.display = 'none'; }, 400);
+        return;
     }
-    container.style.display = 'block'; cardElem.classList.add('expanded');
+    
+    container.style.display = 'block'; 
+    void container.offsetWidth; 
+    container.classList.add('show');
+    cardElem.classList.add('expanded');
+    
     if (container.innerHTML !== '') return; 
     container.innerHTML = '<div class="loader-ring" style="width: 20px; height: 20px; margin: 10px auto; display: block;"></div>';
     
