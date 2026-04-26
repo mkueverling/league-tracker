@@ -145,16 +145,16 @@ def get_db_connection():
     )
 
 def get_rank_info(puuid):
-    if not puuid: return {"tier": "unranked", "lp": 0}
+    if not puuid: return {"tier": "unranked", "division": "", "lp": 0}
     try:
         url = f"https://{PLATFORM}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"
         res = requests.get(url, headers=HEADERS, timeout=3)
         if res.status_code == 200:
             for entry in res.json():
                 if entry.get('queueType') == 'RANKED_SOLO_5x5':
-                    return {"tier": entry.get('tier', 'unranked').lower(), "lp": entry.get('leaguePoints', 0)}
+                    return {"tier": entry.get('tier', 'unranked').lower(), "division": entry.get('rank', ''), "lp": entry.get('leaguePoints', 0)}
     except Exception: pass
-    return {"tier": "unranked", "lp": 0}
+    return {"tier": "unranked", "division": "", "lp": 0}
 
 def get_streak_tag(cursor, puuid):
     if not puuid: return None
@@ -272,7 +272,7 @@ def get_player(name: str, tag: str):
             
             is_streamer = puuid is None
             player_entry, cur_mast, tot_mast, tag_disp = None, 0, 0, None
-            rank_data = {"tier": "unranked", "lp": 0}
+            rank_data = {"tier": "unranked", "division": "", "lp": 0}
             smurfs_list = []
             ladder_rank = None
 
@@ -402,7 +402,7 @@ def get_player(name: str, tag: str):
                 "real_name": real_name, "birthday": birthday,
                 "real_img": real_img, "team_logo": team_logo, "leaguepedia": leaguepedia,
                 "socials": socials_dict, "smurfs": smurfs_list,
-                "rank": rank_data["tier"], "lp": rank_data["lp"],
+                "rank": rank_data["tier"], "division": rank_data.get("division", ""), "lp": rank_data["lp"],
                 "current_mastery": cur_mast, "total_mastery": tot_mast, 
                 "tag": tag_disp, "side": "ally" if p['teamId'] == searcher_team_id else "enemy",
                 "familiar_stats": familiar_data.get(puuid) 
@@ -621,5 +621,48 @@ def get_patch_notes(champion_key: str):
     except Exception as e:
         print(f"Patch notes error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch patch notes")
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/search")
+def search_players(q: str = ""):
+    if len(q) < 2: return []
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        search_term = f"%{q.lower()}%"
+        
+        cursor.execute("""
+            SELECT a.riot_id, p.known_name, p.name, p.profile_image_url
+            FROM accounts a
+            LEFT JOIN players p ON a.player_id = p.player_id
+            WHERE LOWER(a.riot_id) LIKE %s 
+               OR LOWER(p.known_name) LIKE %s 
+               OR LOWER(p.name) LIKE %s
+            LIMIT 5
+        """, (search_term, search_term, search_term))
+        
+        results = cursor.fetchall()
+        base_url = "http://localhost:8000"
+        formatted = []
+        for r in results:
+            img = r.get('profile_image_url')
+            if img and str(img).strip().lower() != "none":
+                img = img.replace('\\', '/').strip()
+                if not img.startswith('/'): img = '/' + img
+                img = base_url + img
+            else:
+                img = ""
+                
+            formatted.append({
+                "riot_id": r['riot_id'],
+                "name": r['known_name'] or r['name'] or "",
+                "image": img
+            })
+        return formatted
+    except Exception as e:
+        print(f"Search Error: {e}")
+        return []
     finally:
         if conn: conn.close()
