@@ -41,7 +41,6 @@ async function loadDictionaries() {
         const versions = await verRes.json();
         patch = versions[0]; 
         
-        // NEW: Update the badge text dynamically to show the real patch!
         const patchBtnText = document.getElementById('patch-btn-text');
         if (patchBtnText) patchBtnText.innerText = 'PATCH ' + patch;
 
@@ -73,12 +72,6 @@ loadDictionaries();
 let currentHistoryOffset = 0;
 let currentHistoryPuuid = "";
 
-function copyLobbyLink(btn) {
-    navigator.clipboard.writeText("protracker.gg/live/EUW/19238471");
-    btn.innerHTML = "COPIED!"; btn.style.color = "var(--green)"; btn.style.borderColor = "var(--green)";
-    setTimeout(() => { btn.innerHTML = "SHARE"; btn.style.color = ""; btn.style.borderColor = ""; }, 2000);
-}
-
 function toggleAnimations() {
     const body = document.body;
     body.classList.toggle('disable-animations');
@@ -86,14 +79,14 @@ function toggleAnimations() {
     if (body.classList.contains('disable-animations')) {
         btn.innerHTML = `
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
-            ANIM OFF
+            ANIMATIONS
         `;
         btn.style.color = "var(--red)";
         btn.style.borderColor = "var(--red)";
     } else {
         btn.innerHTML = `
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-            ANIM ON
+            ANIMATIONS
         `;
         btn.style.color = "";
         btn.style.borderColor = "";
@@ -254,7 +247,7 @@ function renderTeamSummary(teamArray, side, teamTags) {
     const sideTextHtml = `<div style="position: absolute; top: 0; bottom: 0; ${side === 'ally' ? 'left: 20px;' : 'right: 20px;'} display: flex; align-items: center; font-size: clamp(1.1rem, 1.5vw, 1.6rem); font-weight: 900; letter-spacing: 2px; color: ${sColor}; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">${sideText}</div>`;
     const spacer = `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-right: 0.75rem; opacity: 0; pointer-events: none;"><div style="width: 1.4rem;"></div><div style="width: 1.4rem;"></div></div>`;
     
-    return `<div class="card summary-card ${sideClass}" style="--card-delay: 2.2s;">
+    return `<div class="card summary-card ${sideClass}" style="--card-delay: 2.8s;">
         ${sideTextHtml}
         <div class="row-content">
             ${spacer}
@@ -430,7 +423,8 @@ function render(p, index) {
         return `<div class="${cls}">${tag}${tipHtml}</div>`;
     }).join('');
 
-    let familiarTabHtml = '';
+    // --- TOP BANNER (Familiar Tab + Live Badge) ---
+    let familiarTabInner = '';
     if (p.familiar_stats && (p.familiar_stats.wins_with > 0 || p.familiar_stats.losses_with > 0 || p.familiar_stats.wins_against > 0 || p.familiar_stats.losses_against > 0)) {
         const f = p.familiar_stats;
         const totalWith = parseInt(f.wins_with) + parseInt(f.losses_with);
@@ -447,7 +441,7 @@ function render(p, index) {
         }
         
         const tip = "Based on matches stored in the database across all known accounts. W/ = Matches played on same team. VS = Matches against each other.";
-        familiarTabHtml = `
+        familiarTabInner = `
             <div class="familiar-tab tooltip-box" data-tooltip="${tip}">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="margin-right: 6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                 ${textArr.join(' <span style="color:#404048; margin: 0 6px;">|</span> ')}
@@ -455,9 +449,28 @@ function render(p, index) {
         `;
     }
 
+    let liveBadgeInner = '';
+    if (p.is_live && p.socials && p.socials.Twitch) {
+        liveBadgeInner = `
+            <a href="${p.socials.Twitch}" target="_blank" class="live-badge tooltip-box" data-tooltip="Watch Live on Twitch" onclick="event.stopPropagation();">
+                <div class="live-dot"></div> LIVE
+            </a>
+        `;
+    }
+
+    let topBannerHtml = '';
+    if (familiarTabInner || liveBadgeInner) {
+        topBannerHtml = `
+            <div class="top-banner-container">
+                ${liveBadgeInner}
+                ${familiarTabInner}
+            </div>
+        `;
+    }
+
     return `
         <div class="card ${p.side}-card ${cardEffectClass}" style="position: relative; --card-delay: ${animDelay}s;" ${clickAction}>
-            ${familiarTabHtml}
+            ${topBannerHtml}
             ${roleBadgeHtml}
             <div class="card-bg-wrapper"><div class="champ-splash" style="background-image: url('${splashImg}')"></div></div>
             <div class="row-content">
@@ -476,27 +489,33 @@ function render(p, index) {
 async function executeScan() {
     const rawQuery = document.getElementById('target').value.trim();
     
-    // Safety check so users know they need the #EUW part!
     if(!rawQuery.includes('#')) {
         alert("Please include a Region Tag! (Example: Agurin#EUW)");
         return;
     }
 
-    // Trigger the UI transition
     document.body.classList.add('has-searched');
     
-    // Hide the shop if it's currently open
     const shopPage = document.getElementById('shop-page');
     if (shopPage) shopPage.style.display = 'none';
     
-    // Ensure live UI elements are visible
     document.querySelectorAll('.live-ui-element').forEach(el => {
         el.style.display = '';
     });
     
     const [name, tag] = rawQuery.split('#').map(s => s.trim());
     searchIcon.style.display = 'none'; scanLoader.style.display = 'block';
+    
+    // Clear old data
     lTeam.innerHTML = ''; rTeam.innerHTML = ''; document.getElementById('intel-banner').style.display = 'none';
+
+    // RESET PATCH BUTTON ANIMATION FOR NEW SEARCHES
+    const patchBtn = document.getElementById('patch-btn');
+    if (patchBtn) {
+        patchBtn.style.animation = 'none';
+        void patchBtn.offsetWidth; 
+        patchBtn.style.animation = null; 
+    }
 
     try {
         const res = await fetch(`http://localhost:8000/api/player/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`);
@@ -510,14 +529,8 @@ async function executeScan() {
         let currentSeconds = Math.max(0, liveData.game_length || 0);
 
         const queueMap = {
-            400: "Normal Draft",
-            420: "Ranked Solo/Duo",
-            430: "Normal Blind",
-            440: "Ranked Flex",
-            450: "ARAM",
-            490: "Quickplay",
-            700: "Clash",
-            1700: "Arena"
+            400: "Normal Draft", 420: "Ranked Solo/Duo", 430: "Normal Blind", 440: "Ranked Flex",
+            450: "ARAM", 490: "Quickplay", 700: "Clash", 1700: "Arena"
         };
 
         const qId = liveData.queue_id;
@@ -600,7 +613,6 @@ async function executeScan() {
         lTeam.innerHTML = renderTeamSummary(liveData.allies, 'ally', allySummaryTags) + liveData.allies.map((p, i) => render(p, i)).join('');
         rTeam.innerHTML = renderTeamSummary(liveData.enemies, 'enemy', enemySummaryTags) + liveData.enemies.map((p, i) => render(p, i)).join('');
 
-        // Collect unique champion keys from both teams for the patch panel
         const allPlayers = [...liveData.allies, ...liveData.enemies];
         currentLobbyChampKeys = [...new Set(
             allPlayers
@@ -743,8 +755,7 @@ async function fetchAndRenderMatches(offset) {
             </div>`;
         }).join('');
 
-        // Find this line inside fetchAndRenderMatches:
-const loadBtn = `<button onclick="loadMoreMatches()" style="width:100%; padding:12px; background:var(--search-bg); border:1px solid var(--border); color:var(--text-main); font-weight:500; border-radius:6px; cursor:pointer; margin-top:10px; transition: 0.2s;" onmouseover="this.style.borderColor='var(--blue)'; this.style.color='var(--blue)';" onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-main)';">Load 5 More Games</button>`;
+        const loadBtn = `<button onclick="loadMoreMatches()" style="width:100%; padding:12px; background:var(--search-bg); border:1px solid var(--border); color:var(--text-main); font-weight:500; border-radius:6px; cursor:pointer; margin-top:10px; transition: 0.2s;" onmouseover="this.style.borderColor='var(--blue)'; this.style.color='var(--blue)';" onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-main)';">Load 5 More Games</button>`;
         if (offset === 0) loadingDiv.innerHTML = `<div class="recent-games-header">Recent Games</div>` + historyHtml + loadBtn;
         else { loadingDiv.querySelector('button').remove(); loadingDiv.innerHTML += historyHtml + loadBtn; }
     } catch (error) { loadingDiv.innerHTML = `<div style="color: var(--red); text-align: center; margin-top: 50px;">Failed to load.</div>`; }
@@ -797,8 +808,6 @@ async function toggleBuildPath(cardElem, matchId, puuid, runesEncoded) {
     } catch (e) { container.innerHTML = '<div style="color:var(--red); text-align:center;">Failed.</div>'; }
 }
 
-// ── PATCH PANEL ───────────────────────────────────────────────────────────────
-
 function togglePatchPanel() {
     if (patchPanel.classList.contains('active')) {
         closePatchPanel();
@@ -832,12 +841,10 @@ function getAbilityIconUrl(champDetail, slot) {
     if (idx !== undefined && champDetail.spells[idx]) {
         return `https://ddragon.leagueoflegends.com/cdn/${p}/img/spell/${champDetail.spells[idx].image.full}`;
     }
-    // base stats / unknown — use champion square icon
     return `https://ddragon.leagueoflegends.com/cdn/${p}/img/champion/${champDetail.id}.png`;
 }
 
 async function openPatchPanel() {
-    // Close right panel if open
     if (hPanel && hPanel.classList.contains('active')) hPanel.classList.remove('active');
 
     patchPanel.classList.add('active');
@@ -849,7 +856,6 @@ async function openPatchPanel() {
         return;
     }
 
-    // Fetch all champ notes in parallel
     const results = await Promise.all(
         currentLobbyChampKeys.map(async (champKey) => {
             if (patchNotesCache[champKey]) return { champKey, data: patchNotesCache[champKey] };
@@ -864,16 +870,13 @@ async function openPatchPanel() {
         })
     );
 
-    // Update patch version label from first result that has one
     const firstPatch = results.find(r => r.data?.patch_version)?.data?.patch_version;
     const versionLabel = document.getElementById('patch-version-label');
     if (versionLabel) versionLabel.textContent = firstPatch ? `Patch ${firstPatch}` : '–';
 
-    // Separate champions with and without changes
     const withChanges    = results.filter(r => r.data?.abilities?.length > 0);
     const withoutChanges = results.filter(r => !r.data?.abilities?.length);
 
-    // Fetch champion detail data for icon URLs
     const champDetails = {};
     await Promise.all(currentLobbyChampKeys.map(async k => {
         champDetails[k] = await getChampDetail(k);
@@ -881,12 +884,9 @@ async function openPatchPanel() {
 
     let html = '';
 
-    // Champions with patch notes first
     for (const { champKey, data } of withChanges) {
         const detail   = champDetails[champKey];
-        const iconUrl  = detail
-            ? `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${detail.id}.png`
-            : '';
+        const iconUrl  = detail ? `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${detail.id}.png` : '';
         const type     = data.change_type || 'change';
         const typeClass = `patch-type-${type}`;
         const typeLabel = type.toUpperCase();
@@ -922,7 +922,6 @@ async function openPatchPanel() {
             </div>`;
     }
 
-    // Champions with no patch notes at the bottom, collapsed
     if (withoutChanges.length > 0) {
         const names = withoutChanges.map(r => {
             const d = champDetails[r.champKey];
@@ -938,8 +937,6 @@ async function openPatchPanel() {
 
     loadingDiv.innerHTML = html || '<div class="patch-no-changes">No patch data found. Run scrape-patch-notes.py first.</div>';
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function openTeamRoster(teamName, teamLogo) {
     const panel = document.getElementById('team-roster-panel');
@@ -958,26 +955,19 @@ function closeTeamRoster() {
     panel.classList.remove('active'); setTimeout(() => panel.style.display = 'none', 300);
 }
 
-
-// ── SHOP NAVIGATION ────────────────────────────────────────────────────────────
-
 function openShop() {
-    // Hide the landing page if it's currently active
     const landing = document.getElementById('landing-page');
     if (landing) landing.style.display = 'none';
     
-    // Hide all live arena elements if they are currently active
     document.querySelectorAll('.live-ui-element').forEach(el => {
         el.style.display = 'none';
     });
     
-    // Close side panels if they are open
     if (hPanel && hPanel.classList.contains('active')) hPanel.classList.remove('active');
     if (patchPanel && patchPanel.classList.contains('active')) closePatchPanel();
     const rosterPanel = document.getElementById('team-roster-panel');
     if (rosterPanel && rosterPanel.classList.contains('active')) closeTeamRoster();
     
-    // Show the shop
     const shopPage = document.getElementById('shop-page');
     if (shopPage) shopPage.style.display = 'flex';
 }
@@ -986,23 +976,16 @@ function closeShop() {
     const shopPage = document.getElementById('shop-page');
     if (shopPage) shopPage.style.display = 'none';
     
-    // Check if the user was looking at a live game or the landing page
     if (document.body.classList.contains('has-searched')) {
-        // Bring back the live arena
         document.querySelectorAll('.live-ui-element').forEach(el => {
             el.style.display = '';
         });
     } else {
-        // Bring back the landing page
         const landing = document.getElementById('landing-page');
         if (landing) landing.style.display = 'block';
     }
 }
 
-
-// ── EVENT LISTENERS ──────────────────────────────────────────────────────────
-
-// Map the big landing search bar to the top search bar
 const landingTarget = document.getElementById('landing-target');
 if (landingTarget) {
     landingTarget.addEventListener('keypress', e => { 

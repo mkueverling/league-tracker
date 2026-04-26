@@ -45,10 +45,8 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 /* --- NEW PATCH VERSION BADGE --- */
 .patch-version-badge {
     position: absolute;
-    /* Aligns perfectly with the player name height */
-    top: 22px; 
-    /* Pushes the button entirely to the left of the card */
-    right: calc(100% + 15px); 
+    top: -45px; 
+    left: 0; 
     display: flex;
     align-items: center;
     gap: 8px;
@@ -67,11 +65,17 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
     z-index: 20;
     backdrop-filter: blur(4px);
     outline: none;
-    /* Prevents the text from wrapping if the screen gets small */
     white-space: nowrap; 
+    
+    opacity: 0;
+    animation: patchBadgeFadeIn 0.5s ease forwards;
+    animation-delay: 3.2s;
+}
+@keyframes patchBadgeFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 .patch-version-badge:hover { background: var(--card-hover); border-color: var(--gold); color: var(--gold); box-shadow: 0 6px 15px rgba(241, 196, 15, 0.2); }
-
 .patch-icon-wrapper { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); transition: 0.2s; }
 .patch-version-badge:hover .patch-icon-wrapper { color: var(--gold); border-color: var(--gold); }
 
@@ -90,8 +94,9 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 /* --- SUMMARY CARD FIXES --- */
 .summary-card { 
     height: clamp(45px, 6vh, 70px) !important; cursor: default !important; background: #1e1e22 !important; 
-    border: 1px solid var(--border) !important; box-shadow: var(--shadow-card) !important; opacity: 1 !important; 
-    z-index: 10; animation: fadeIn 0.5s ease forwards; animation-delay: var(--card-delay, 0s); 
+    border: 1px solid var(--border) !important; box-shadow: var(--shadow-card) !important; 
+    opacity: 0; 
+    z-index: 10; animation: summaryFadeIn 0.6s ease forwards; animation-delay: var(--card-delay, 0s); 
 }
 .summary-card:hover { transform: none !important; box-shadow: var(--shadow-card) !important; z-index: 10; }
 .summary-card .row-content { align-items: stretch; }
@@ -103,7 +108,7 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .enemy-card.summary-card { border-right: 5px solid var(--red) !important; }
 
 .summary-box-left, .summary-box-mid, .summary-box-right { display: flex; flex-direction: column; justify-content: center; position: relative; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes summaryFadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
 .card-bg-wrapper { position: absolute; inset: 0; overflow: hidden; border-radius: 5px; z-index: 1; }
 .champ-splash { position: absolute; left: 0; top: 0; bottom: 0; width: 25%; background-size: 150%; background-position: center 20%; opacity: var(--splash-opacity); z-index: 0; -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); mask-image: linear-gradient(to right, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
@@ -225,6 +230,7 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .disable-animations .badge-vip { background: rgba(0, 255, 255, 0.15); border-color: #00ffff; color: #00ffff; box-shadow: 0 0 12px rgba(0, 255, 255, 0.3); }
 .disable-animations .vip-name-animated { color: #00ffff; text-shadow: 0 0 8px rgba(0, 255, 255, 0.5); }
 .disable-animations .effect-infernal, .disable-animations .effect-celestial, .disable-animations .effect-void { animation: none !important; }
+.disable-animations .summary-card, .disable-animations .patch-version-badge { animation: none !important; opacity: 1 !important; }
 
 /* --- TOOLTIP FIXES & HTML TOOLTIP --- */
 .tooltip-box { position: relative; cursor: help; }
@@ -250,7 +256,23 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .top-header .html-tooltip-box .tooltip-content { bottom: auto; top: 125%; }
 
 /* --- FLUID SIDEBAR --- */
-.history-panel { box-sizing: border-box; position: fixed; right: -750px; top: 0; width: 20vw; min-width: 350px; max-width: 500px; height: 100vh; background: var(--panel-bg); border-left: 2px solid var(--border); transition: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 200; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px;}
+.history-panel { 
+    box-sizing: border-box; 
+    position: fixed; 
+    right: -750px; 
+    top: 70px; 
+    height: calc(100vh - 105px); 
+    width: 20vw; 
+    min-width: 350px; 
+    max-width: 500px; 
+    background: var(--panel-bg); 
+    border-left: 2px solid var(--border); 
+    transition: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); 
+    z-index: 90; 
+    overflow-y: auto; 
+    overflow-x: hidden; 
+    padding-bottom: 20px;
+}
 .history-panel.active { right: 0; box-shadow: -10px 0 30px var(--shadow); }
 .sidebar-content { position: relative; z-index: 10; padding: 0 20px 20px 20px; }
 
@@ -312,13 +334,26 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .roster-player-name { font-weight: 800; font-size: 1rem; color: var(--text-main); }
 .roster-player-role { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; }
 
-.familiar-tab { position: absolute; top: 0; right: 25px; transform: translateY(-50%); background: #1a1a1f; border: 1px solid var(--border); border-top: 1px solid rgba(255, 255, 255, 0.15); color: var(--text-main); padding: 5px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; z-index: 30; display: flex; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.6); letter-spacing: 0.5px; }
-.enemy-card .familiar-tab { right: auto; left: 25px; }
-
 /* ══════════════════════════════════════════════════════
    PATCH NOTES LEFT PANEL
    ══════════════════════════════════════════════════════ */
-.patch-panel { box-sizing: border-box; position: fixed; left: -520px; top: 0; width: 20vw; min-width: 360px; max-width: 500px; height: 100vh; background: var(--panel-bg); border-right: 2px solid var(--border); transition: left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 200; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px; }
+.patch-panel { 
+    box-sizing: border-box; 
+    position: fixed; 
+    left: -520px; 
+    top: 70px; 
+    height: calc(100vh - 105px); 
+    width: 20vw; 
+    min-width: 360px; 
+    max-width: 500px; 
+    background: var(--panel-bg); 
+    border-right: 2px solid var(--border); 
+    transition: left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); 
+    z-index: 90; 
+    overflow-y: auto; 
+    overflow-x: hidden; 
+    padding-bottom: 20px; 
+}
 .patch-panel.active { left: 0; box-shadow: 10px 0 30px var(--shadow); }
 .patch-champ-entry { margin-bottom: 32px; padding-bottom: 28px; border-bottom: 1px solid var(--border); }
 .patch-champ-entry:last-child { border-bottom: none; }
@@ -343,7 +378,6 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 .patch-note-item.is-negative { color: #e74c3c; border-left-color: rgba(231, 76, 60, 0.5); background: rgba(231, 76, 60, 0.04); }
 .patch-no-changes { font-size: 0.75rem; color: var(--text-muted); font-style: italic; padding: 6px 0; opacity: 0.6; }
 
-
 /* ========================================= */
 /* LANDING PAGE STYLES                       */
 /* ========================================= */
@@ -358,31 +392,35 @@ body:not(.has-searched) .top-search-area { opacity: 0; pointer-events: none; wid
 body.has-searched .landing-page { opacity: 0; pointer-events: none; }
 
 .mock-lobby-bg {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    pointer-events: none; z-index: 0;
+    position: fixed; 
+    inset: 0; 
+    width: 100vw; 
+    height: 100vh;
+    pointer-events: none; 
+    z-index: 0; 
     
     background-image: url('http://localhost:8000/images/miscellaneous/landing-bg.png'); 
-    background-size: cover;
+    background-size: 100% auto; 
+    background-repeat: no-repeat;
     background-position: center top;
     
     opacity: 0.85; 
     filter: saturate(0.6); 
     
-    -webkit-mask-image: linear-gradient(to right, 
-        rgba(0,0,0,1) 0%, 
-        rgba(0,0,0,0.9) 15%, 
-        rgba(0,0,0,0.05) 35%, 
-        rgba(0,0,0,0.05) 65%, 
-        rgba(0,0,0,0.9) 85%, 
-        rgba(0,0,0,1) 100%
+    /* STRONGER VIGNETTE: The fade-out to black happens much faster now (hitting 0 at 70%) */
+    -webkit-mask-image: radial-gradient(ellipse at center, 
+        rgba(0,0,0,0.05) 0%, 
+        rgba(0,0,0,0.05) 15%, 
+        rgba(0,0,0,0.85) 40%, 
+        rgba(0,0,0,0.85) 55%, 
+        rgba(0,0,0,0) 70%
     );
-    mask-image: linear-gradient(to right, 
-        rgba(0,0,0,1) 0%, 
-        rgba(0,0,0,0.9) 15%, 
-        rgba(0,0,0,0.05) 35%, 
-        rgba(0,0,0,0.05) 65%, 
-        rgba(0,0,0,0.9) 85%, 
-        rgba(0,0,0,1) 100%
+    mask-image: radial-gradient(ellipse at center, 
+        rgba(0,0,0,0.05) 0%, 
+        rgba(0,0,0,0.05) 15%, 
+        rgba(0,0,0,0.85) 40%, 
+        rgba(0,0,0,0.85) 55%, 
+        rgba(0,0,0,0) 70%
     );
 }
 
@@ -390,7 +428,6 @@ body.has-searched .landing-page { opacity: 0; pointer-events: none; }
     position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
     z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center;
     width: 100%;
-    /* Softened the radial background glow significantly */
     background: radial-gradient(circle at center, rgba(36,36,36,0.4) 0%, rgba(36,36,36,0) 50%);
     padding: 40px;
 }
@@ -411,19 +448,9 @@ body.has-searched .landing-page { opacity: 0; pointer-events: none; }
     color: var(--text-main); opacity: 0.85; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8);
 }
 
-.landing-search-container { 
-    width: clamp(300px, 40vw, 500px); padding: 18px 25px; border-radius: 12px; 
-    background: rgba(30, 30, 34, 0.95); 
-    border: 1px solid var(--border); transition: 0.3s; z-index: 5; 
-    /* Softened default shadow */
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
-}
-.landing-search-container:focus-within { 
-    border-color: var(--gold); 
-    /* Softened the intense gold glow focus */
-    box-shadow: 0 10px 35px rgba(241, 196, 15, 0.1); 
-}
-
+.landing-search-container { width: clamp(300px, 40vw, 500px); padding: 18px 25px; border-radius: 12px; background: rgba(30, 30, 34, 0.95); box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--border); transition: 0.3s; z-index: 5; }
+.landing-search-container:focus-within { border-color: var(--gold); box-shadow: 0 10px 35px rgba(241, 196, 15, 0.1); }
+.landing-search-container input { font-size: 1.4rem; }
 
 /* ========================================= */
 /* SHOP UI & CUSTOMIZATION STYLES            */
@@ -460,8 +487,6 @@ body.has-searched .landing-page { opacity: 0; pointer-events: none; }
 .shop-buy-btn:hover { background: var(--gold); border-color: var(--gold); color: #111; }
 
 /* --- NEW CARD ANIMATIONS --- */
-
-/* Infernal */
 .effect-infernal { border: 1px solid #ff5722 !important; }
 @keyframes infernalGlow {
     0%   { box-shadow: 0 0 10px rgba(255, 87, 34, 0.3), inset 0 0 15px rgba(255, 87, 34, 0.1); border-color: #ff5722; }
@@ -469,7 +494,6 @@ body.has-searched .landing-page { opacity: 0; pointer-events: none; }
     100% { box-shadow: 0 0 10px rgba(255, 87, 34, 0.3), inset 0 0 15px rgba(255, 87, 34, 0.1); border-color: #ff5722; }
 }
 
-/* Celestial */
 .effect-celestial { border: 1px solid #ffffff !important; }
 @keyframes celestialGlow {
     0%   { box-shadow: 0 0 10px rgba(255, 255, 255, 0.3), inset 0 0 15px rgba(255, 255, 255, 0.1); border-color: #ffffff; }
@@ -477,10 +501,81 @@ body.has-searched .landing-page { opacity: 0; pointer-events: none; }
     100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.3), inset 0 0 15px rgba(255, 255, 255, 0.1); border-color: #ffffff; }
 }
 
-/* Void */
 .effect-void { border: 1px solid #9c27b0 !important; }
 @keyframes voidGlow {
     0%   { box-shadow: 0 0 10px rgba(156, 39, 176, 0.4), inset 0 0 10px rgba(156, 39, 176, 0.1); border-color: #8e44ad; }
     50%  { box-shadow: 0 0 25px rgba(142, 68, 173, 0.7), inset 0 0 20px rgba(142, 68, 173, 0.4); border-color: #9b59b6; }
     100% { box-shadow: 0 0 10px rgba(156, 39, 176, 0.4), inset 0 0 10px rgba(156, 39, 176, 0.1); border-color: #8e44ad; }
+}
+
+/* --- TOP BANNER FEATURES (Familiar Tab & Live Badge) --- */
+.top-banner-container {
+    position: absolute;
+    top: 0;
+    right: 25px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 30;
+}
+.enemy-card .top-banner-container {
+    right: auto;
+    left: 25px;
+    flex-direction: row-reverse;
+}
+
+.familiar-tab {
+    background: #1a1a1f; 
+    border: 1px solid var(--border); 
+    border-top: 1px solid rgba(255, 255, 255, 0.15); 
+    color: var(--text-main); 
+    padding: 5px 14px; 
+    border-radius: 20px; 
+    font-size: 0.75rem; 
+    font-weight: 800; 
+    display: flex; 
+    align-items: center; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.6); 
+    letter-spacing: 0.5px;
+}
+
+.live-badge {
+    background: rgba(20, 20, 24, 0.95);
+    border: 1px solid #e74c3c;
+    border-top: 1px solid #ff7675;
+    border-radius: 20px;
+    padding: 5px 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 900;
+    color: #e74c3c;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 10px rgba(231, 76, 60, 0.2);
+    animation: livePulse 2s infinite;
+    cursor: pointer;
+    text-decoration: none;
+    backdrop-filter: blur(2px);
+    transition: 0.2s;
+}
+.live-badge:hover {
+    background: rgba(231, 76, 60, 0.15);
+    color: #ff7675;
+    border-color: #ff7675;
+}
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: #e74c3c;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #e74c3c;
+}
+
+@keyframes livePulse {
+    0% { border-color: rgba(231, 76, 60, 0.4); box-shadow: 0 0 5px rgba(231, 76, 60, 0.2); }
+    50% { border-color: rgba(231, 76, 60, 1); box-shadow: 0 0 15px rgba(231, 76, 60, 0.5); }
+    100% { border-color: rgba(231, 76, 60, 0.4); box-shadow: 0 0 5px rgba(231, 76, 60, 0.2); }
 }

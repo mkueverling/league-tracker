@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import requests, os, urllib.parse, psycopg2, time, itertools
+import requests, os, urllib.parse, psycopg2, time, itertools, re
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv, find_dotenv
 
@@ -13,6 +13,46 @@ REGION, PLATFORM = "europe", "euw1"
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/images", StaticFiles(directory="../images"), name="images")
+
+# --- TWITCH LIVE-CHECK LOGIC ---
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
+TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
+twitch_access_token = None
+twitch_token_expiry = 0
+
+def get_twitch_token():
+    global twitch_access_token, twitch_token_expiry
+    if not TWITCH_CLIENT_ID or not TWITCH_CLIENT_SECRET: return None
+    if time.time() >= twitch_token_expiry:
+        try:
+            res = requests.post(f"https://id.twitch.tv/oauth2/token?client_id={TWITCH_CLIENT_ID}&client_secret={TWITCH_CLIENT_SECRET}&grant_type=client_credentials", timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                twitch_access_token = data['access_token']
+                twitch_token_expiry = time.time() + data['expires_in'] - 60
+        except Exception as e:
+            print(f"Twitch Token Error: {e}")
+    return twitch_access_token
+
+def extract_twitch_username(url):
+    if not url: return None
+    match = re.search(r'twitch\.tv/([^/?]+)', url.lower())
+    return match.group(1) if match else None
+
+def check_twitch_live(usernames):
+    if not usernames: return set()
+    token = get_twitch_token()
+    if not token: return set()
+    headers = {"Client-ID": TWITCH_CLIENT_ID, "Authorization": f"Bearer {token}"}
+    query = "&".join([f"user_login={u}" for u in usernames[:100]])
+    try:
+        res = requests.get(f"https://api.twitch.tv/helix/streams?{query}", headers=headers, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            return {stream['user_login'].lower() for stream in data.get('data', [])}
+    except Exception as e:
+        print(f"Twitch API Error: {e}")
+    return set()
 
 # --- CHAMPION & ROLE LOGIC ENGINE ---
 CHAMP_ID_TO_NAME = {}
@@ -173,8 +213,6 @@ def get_player(name: str, tag: str):
         searcher_team_id = 100
         search_string = f"{name}#{tag}".lower()
         lobby_puuids = []
-        ally_puuids = []
-        enemy_puuids = []
         
         for p in game_data['participants']:
             p_puuid = p.get('puuid')
@@ -182,12 +220,6 @@ def get_player(name: str, tag: str):
             if p_puuid: lobby_puuids.append(p_puuid)
             if (p_puuid and p_puuid == target_puuid) or (p_riot_id == search_string):
                 searcher_team_id = p['teamId']
-
-        for p in game_data['participants']:
-            p_puuid = p.get('puuid')
-            if not p_puuid: continue
-            if p['teamId'] == searcher_team_id: ally_puuids.append(p_puuid)
-            else: enemy_puuids.append(p_puuid)
 
         searcher_tag = get_streak_tag(cursor, target_puuid)
         
@@ -230,6 +262,8 @@ def get_player(name: str, tag: str):
         allies, enemies = [], []
         ally_m_total, enemy_m_total, ally_streaks, enemy_streaks = 0, 0, 0, 0
         base_url = "http://localhost:8000"
+        
+        twitch_check_map = {} 
 
         for p in game_data['participants']:
             puuid = p.get('puuid').strip() if p.get('puuid') else None
@@ -345,6 +379,11 @@ def get_player(name: str, tag: str):
                 else:
                     enemy_m_total += tot_mast
                     if tag_disp in ["Winning", "On Fire", "Winners Queue"]: enemy_streaks += 1
+                    
+                if "Twitch" in socials_dict:
+                    t_user = extract_twitch_username(socials_dict["Twitch"])
+                    if t_user:
+                        twitch_check_map[t_user] = puuid
 
             p_payload = {
                 "puuid": puuid, "riotId": riot_id,
@@ -353,6 +392,7 @@ def get_player(name: str, tag: str):
                 "primary_perk": primary_perk, "sub_style": sub_style,
                 "is_pro": is_pro, "is_creator": is_creator,
                 "is_vip": (db_special_tag == 'VIP'),
+                "is_live": False,
                 "known_name": player_entry.get('known_name') or player_entry.get('name') if player_entry else None,
                 "ladder_rank": ladder_rank, 
                 "team": player_entry.get('team') if player_entry else None,
@@ -371,7 +411,13 @@ def get_player(name: str, tag: str):
             if p['teamId'] == searcher_team_id: allies.append(p_payload)
             else: enemies.append(p_payload)
 
-        # --- SYNERGY CHECK (PRO TEAM) ---
+        if twitch_check_map:
+            live_users = check_twitch_live(list(twitch_check_map.keys()))
+            live_puuids = {twitch_check_map[u] for u in live_users if u in twitch_check_map}
+            for p in allies + enemies:
+                if p["puuid"] in live_puuids:
+                    p["is_live"] = True
+
         def has_pro_synergy(team_list):
             teams_count = {}
             for participant in team_list:
@@ -515,15 +561,14 @@ def get_team_roster(team_name: str):
         raise HTTPException(status_code=500, detail="Failed to fetch team roster")
     finally:
         if conn: conn.close()
+
 @app.get("/api/patch/{champion_key}")
 def get_patch_notes(champion_key: str):
-    """Returns the latest stored patch notes for a given champion key (DDragon format, e.g. 'TwistedFate')."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get the most recent patch version that has data for this champion
         cursor.execute("""
             SELECT DISTINCT patch_version
             FROM patch_notes
@@ -557,7 +602,6 @@ def get_patch_notes(champion_key: str):
         if not abilities:
             return {"champion_key": champion_key, "patch_version": patch_version, "change_type": None, "abilities": []}
 
-        # Overall change_type = most severe of the ability blocks
         all_types = [a["change_type"] for a in abilities]
         overall = "nerf" if "nerf" in all_types else ("buff" if "buff" in all_types else "change")
 
