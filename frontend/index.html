@@ -24,6 +24,10 @@
     </div>
     <div class="header-right">
         <button class="share-btn" id="anim-toggle-btn" onclick="toggleAnimations()" style="margin-right: 8px;">ANIM ON</button>
+        <button class="share-btn" id="patch-btn" onclick="togglePatchPanel()" style="margin-right: 8px; display: none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px; vertical-align: middle;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            PATCH
+        </button>
         <div class="search-area">
             <div class="search-container" id="search-container">
                 <input type="text" id="target" placeholder="TARGET#TAG" autocomplete="off">
@@ -54,6 +58,7 @@
     Pro Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.
 </footer>
 
+<!-- RIGHT PANEL: Player history -->
 <div id="history-panel" class="history-panel">
     <img id="panel-pro-img" class="panel-pro-img" style="display:none;" onerror="this.style.display='none'">
     <div class="sidebar-content">
@@ -66,6 +71,21 @@
             <div id="panel-smurfs"></div>
             <div style="height: 1px; background: var(--border); margin: 25px 0;"></div>
             <div id="history-loading"></div>
+        </div>
+    </div>
+</div>
+
+<!-- LEFT PANEL: Patch notes -->
+<div id="patch-panel" class="patch-panel">
+    <div class="sidebar-content">
+        <span class="close-btn" id="close-patch-btn" onclick="closePatchPanel()">✕ CLOSE</span>
+        <div style="padding-top: 10px;">
+            <div id="patch-panel-header" style="margin-bottom: 20px;">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 2px;">Patch Notes</div>
+                <div id="patch-version-label" style="font-size: 2rem; font-weight: 900; color: var(--text-main); line-height: 1; margin-top: 4px;">–</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Champions in this lobby only</div>
+            </div>
+            <div id="patch-loading"></div>
         </div>
     </div>
 </div>

@@ -1,6 +1,7 @@
 const lTeam = document.getElementById('left-team');
 const rTeam = document.getElementById('right-team');
 const hPanel = document.getElementById('history-panel');
+const patchPanel = document.getElementById('patch-panel');
 const scanLoader = document.getElementById('scan-loader');
 const searchIcon = document.getElementById('search-icon');
 let patch = "14.8.1"; 
@@ -12,6 +13,9 @@ let liveTimerInterval = null;
 
 const historyCache = {};
 const timelineCache = {};
+const patchNotesCache = {};
+let currentLobbyChampKeys = [];
+let champDetailCache = {};
 
 const flagMap = {
     "Germany": "🇩🇪", "South Korea": "🇰🇷", "France": "🇫🇷", "Spain": "🇪🇸", 
@@ -151,14 +155,14 @@ function getBadgeClass(tag) {
 
 function getTagTooltip(tag) {
     const tips = {
-        'STREAMER':         'Streams live on Twitch',
+        'STREAMER':         'Streams on Twitch',
         'CONTENT CREATOR':  'YouTube content creator',
-        'OBSESSED':         '3M+ mastery — Needs to touch grass immediately',
-        'CREATURE':         '5M+ mastery — Absolute monster on this champion',
-        'THREAT':           '1.5M+ mastery — OTP territory on this champion',
-        'SECRET WEAPON':    'Low mastery on this account, but enormous across their other accounts',
-        'THE DEV':          '👨‍💻 The guy who built this',
-        'VIP':              '⭐ Personal friend',
+        'OBSESSED':         'Really likes playing this champion',
+        'CREATURE':         'Ridiculous amount of games played on this champion',
+        'THREAT':           'Careful! OTP territory on this champion',
+        'SECRET WEAPON':    'Low mastery on this account, but enormous across linked accounts',
+        'THE DEV':          'Made the website. You found him!',
+        'VIP':              'Special Friend of the Dev',
         'Winners Queue':    '7+ game win streak',
         'On Fire':          '5+ game win streak',
         'Winning':          '3+ game win streak',
@@ -167,8 +171,8 @@ function getTagTooltip(tag) {
         'Unlucky':          '3+ game loss streak',
         "YOU'RE COOKED":    'Enemy on a hot streak with heavy mastery — pray',
         'FF ANGLE?':        'Enemy team mastery and win momentum strongly favored',
-        'INSECURE':         'Streamer mode active — identity hidden by Riot',
-        'HIGH SYNERGY':     'At least two players on this team play for the same pro team.',
+        'INSECURE':         'Scared to show their identity',
+        'HIGH SYNERGY':     'At least two players on this team play for the same pro team',
         'SKILL ISSUE':      'This team has 50% or less total mastery compared to the enemy.'
     };
     return tips[tag] || null;
@@ -576,6 +580,17 @@ async function executeScan() {
 
         lTeam.innerHTML = renderTeamSummary(liveData.allies, 'ally', allySummaryTags) + liveData.allies.map((p, i) => render(p, i)).join('');
         rTeam.innerHTML = renderTeamSummary(liveData.enemies, 'enemy', enemySummaryTags) + liveData.enemies.map((p, i) => render(p, i)).join('');
+
+        // Collect unique champion keys from both teams for the patch panel
+        const allPlayers = [...liveData.allies, ...liveData.enemies];
+        currentLobbyChampKeys = [...new Set(
+            allPlayers
+                .filter(p => !p.is_streamer && p.championId)
+                .map(p => championMap[p.championId])
+                .filter(Boolean)
+        )];
+        const patchBtn = document.getElementById('patch-btn');
+        if (patchBtn) patchBtn.style.display = 'inline-flex';
     }catch (e) {
         document.getElementById('intel-text').innerHTML = `<span class='intel-accent' style='color:var(--red);'>ERROR:</span> ${e.message}`;
         document.getElementById('intel-banner').style.display = 'flex';
@@ -763,6 +778,150 @@ async function toggleBuildPath(cardElem, matchId, puuid, runesEncoded) {
     } catch (e) { container.innerHTML = '<div style="color:var(--red); text-align:center;">Failed.</div>'; }
 }
 
+// ── PATCH PANEL ───────────────────────────────────────────────────────────────
+
+function togglePatchPanel() {
+    if (patchPanel.classList.contains('active')) {
+        closePatchPanel();
+    } else {
+        openPatchPanel();
+    }
+}
+
+function closePatchPanel() {
+    patchPanel.classList.remove('active');
+}
+
+async function getChampDetail(champKey) {
+    if (champDetailCache[champKey]) return champDetailCache[champKey];
+    try {
+        const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${patch}/data/en_US/champion/${champKey}.json`);
+        const data = await res.json();
+        champDetailCache[champKey] = data.data[champKey];
+        return champDetailCache[champKey];
+    } catch(e) { return null; }
+}
+
+function getAbilityIconUrl(champDetail, slot) {
+    if (!champDetail) return '';
+    const p = patch;
+    if (slot === 'passive') {
+        return `https://ddragon.leagueoflegends.com/cdn/${p}/img/passive/${champDetail.passive.image.full}`;
+    }
+    const slotMap = { q: 0, w: 1, e: 2, r: 3 };
+    const idx = slotMap[slot];
+    if (idx !== undefined && champDetail.spells[idx]) {
+        return `https://ddragon.leagueoflegends.com/cdn/${p}/img/spell/${champDetail.spells[idx].image.full}`;
+    }
+    // base stats / unknown — use champion square icon
+    return `https://ddragon.leagueoflegends.com/cdn/${p}/img/champion/${champDetail.id}.png`;
+}
+
+async function openPatchPanel() {
+    // Close right panel if open
+    hPanel.classList.remove('active');
+
+    patchPanel.classList.add('active');
+    const loadingDiv = document.getElementById('patch-loading');
+    loadingDiv.innerHTML = '<div class="loader-ring" style="display:block; margin: 40px auto;"></div>';
+
+    if (currentLobbyChampKeys.length === 0) {
+        loadingDiv.innerHTML = '<div class="patch-no-changes">No champions detected. Run a scan first.</div>';
+        return;
+    }
+
+    // Fetch all champ notes in parallel
+    const results = await Promise.all(
+        currentLobbyChampKeys.map(async (champKey) => {
+            if (patchNotesCache[champKey]) return { champKey, data: patchNotesCache[champKey] };
+            try {
+                const res = await fetch(`http://localhost:8000/api/patch/${encodeURIComponent(champKey)}`);
+                const data = await res.json();
+                patchNotesCache[champKey] = data;
+                return { champKey, data };
+            } catch(e) {
+                return { champKey, data: null };
+            }
+        })
+    );
+
+    // Update patch version label from first result that has one
+    const firstPatch = results.find(r => r.data?.patch_version)?.data?.patch_version;
+    const versionLabel = document.getElementById('patch-version-label');
+    if (versionLabel) versionLabel.textContent = firstPatch ? `Patch ${firstPatch}` : '–';
+
+    // Separate champions with and without changes
+    const withChanges    = results.filter(r => r.data?.abilities?.length > 0);
+    const withoutChanges = results.filter(r => !r.data?.abilities?.length);
+
+    // Fetch champion detail data for icon URLs
+    const champDetails = {};
+    await Promise.all(currentLobbyChampKeys.map(async k => {
+        champDetails[k] = await getChampDetail(k);
+    }));
+
+    let html = '';
+
+    // Champions with patch notes first
+    for (const { champKey, data } of withChanges) {
+        const detail   = champDetails[champKey];
+        const iconUrl  = detail
+            ? `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${detail.id}.png`
+            : '';
+        const type     = data.change_type || 'change';
+        const typeClass = `patch-type-${type}`;
+        const typeLabel = type.toUpperCase();
+
+        let abilitiesHtml = '';
+        for (const ab of data.abilities) {
+            const abilityIconUrl = getAbilityIconUrl(detail, ab.slot);
+            const notesHtml = (ab.notes || []).map(n => {
+                const cls = n.is_positive ? 'is-positive' : (n.is_negative ? 'is-negative' : '');
+                return `<li class="patch-note-item ${cls}">${n.text}</li>`;
+            }).join('');
+
+            abilitiesHtml += `
+                <div class="patch-ability-block">
+                    <div class="patch-ability-header">
+                        <img class="patch-ability-icon" src="${abilityIconUrl}" onerror="this.style.opacity='0.2'">
+                        <span class="patch-ability-name">${ab.name}</span>
+                    </div>
+                    <ul class="patch-notes-list">${notesHtml}</ul>
+                </div>`;
+        }
+
+        html += `
+            <div class="patch-champ-entry">
+                <div class="patch-champ-header">
+                    <img class="patch-champ-icon" src="${iconUrl}" onerror="this.style.opacity='0.2'" alt="${champKey}">
+                    <div>
+                        <div class="patch-champ-name">${champKey}</div>
+                        <span class="patch-type-badge ${typeClass}">${typeLabel}</span>
+                    </div>
+                </div>
+                ${abilitiesHtml}
+            </div>`;
+    }
+
+    // Champions with no patch notes at the bottom, collapsed
+    if (withoutChanges.length > 0) {
+        const names = withoutChanges.map(r => {
+            const d = champDetails[r.champKey];
+            const icon = d ? `<img src="https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${d.id}.png" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--border); margin-right:6px; vertical-align:middle;">` : '';
+            return `${icon}<span style="font-size:0.8rem; color:var(--text-muted);">${r.champKey}</span>`;
+        });
+        html += `
+            <div class="patch-champ-entry" style="opacity: 0.5;">
+                <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 10px;">No changes this patch</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">${names.join('')}</div>
+            </div>`;
+    }
+
+    loadingDiv.innerHTML = html || '<div class="patch-no-changes">No patch data found. Run scrape-patch-notes.py first.</div>';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function openTeamRoster(teamName, teamLogo) {
     const panel = document.getElementById('team-roster-panel');
     const content = document.getElementById('roster-content');
@@ -782,6 +941,7 @@ function closeTeamRoster() {
 
 document.addEventListener('click', (e) => { 
     if (hPanel.classList.contains('active') && !hPanel.contains(e.target) && !e.target.closest('.card') && !e.target.closest('.team-roster-panel')) hPanel.classList.remove('active');
+    if (patchPanel.classList.contains('active') && !patchPanel.contains(e.target) && !e.target.closest('#patch-btn')) closePatchPanel();
     if (document.getElementById('team-roster-panel').classList.contains('active') && !document.getElementById('team-roster-panel').contains(e.target) && !e.target.closest('.clickable-team')) closeTeamRoster();
 });
 

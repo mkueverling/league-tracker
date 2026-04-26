@@ -515,3 +515,67 @@ def get_team_roster(team_name: str):
         raise HTTPException(status_code=500, detail="Failed to fetch team roster")
     finally:
         if conn: conn.close()
+@app.get("/api/patch/{champion_key}")
+def get_patch_notes(champion_key: str):
+    """Returns the latest stored patch notes for a given champion key (DDragon format, e.g. 'TwistedFate')."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get the most recent patch version that has data for this champion
+        cursor.execute("""
+            SELECT DISTINCT patch_version
+            FROM patch_notes
+            WHERE LOWER(champion_key) = LOWER(%s)
+            ORDER BY patch_version DESC
+            LIMIT 1
+        """, (champion_key,))
+        row = cursor.fetchone()
+        if not row:
+            return {"champion_key": champion_key, "patch_version": None, "change_type": None, "abilities": []}
+
+        patch_version = row["patch_version"]
+
+        cursor.execute("""
+            SELECT ability_slot, ability_name, change_type, notes
+            FROM patch_notes
+            WHERE LOWER(champion_key) = LOWER(%s) AND patch_version = %s
+            ORDER BY
+                CASE ability_slot
+                    WHEN 'base'    THEN 0
+                    WHEN 'passive' THEN 1
+                    WHEN 'q'       THEN 2
+                    WHEN 'w'       THEN 3
+                    WHEN 'e'       THEN 4
+                    WHEN 'r'       THEN 5
+                    ELSE 6
+                END
+        """, (champion_key, patch_version))
+
+        abilities = cursor.fetchall()
+        if not abilities:
+            return {"champion_key": champion_key, "patch_version": patch_version, "change_type": None, "abilities": []}
+
+        # Overall change_type = most severe of the ability blocks
+        all_types = [a["change_type"] for a in abilities]
+        overall = "nerf" if "nerf" in all_types else ("buff" if "buff" in all_types else "change")
+
+        return {
+            "champion_key":  champion_key,
+            "patch_version": patch_version,
+            "change_type":   overall,
+            "abilities": [
+                {
+                    "slot":  a["ability_slot"],
+                    "name":  a["ability_name"],
+                    "notes": a["notes"]
+                }
+                for a in abilities
+            ]
+        }
+    except Exception as e:
+        print(f"Patch notes error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch patch notes")
+    finally:
+        if conn: conn.close()

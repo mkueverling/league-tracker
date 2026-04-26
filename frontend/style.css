@@ -517,3 +517,135 @@ body { margin: 0; padding: 70px 0 0 0; background-color: var(--bg); color: var(-
 
 .familiar-tab { position: absolute; top: 0; right: 25px; transform: translateY(-50%); background: #1a1a1f; border: 1px solid var(--border); border-top: 1px solid rgba(255, 255, 255, 0.15); color: var(--text-main); padding: 5px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; z-index: 30; display: flex; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.6); letter-spacing: 0.5px; }
 .enemy-card .familiar-tab { right: auto; left: 25px; }
+/* ══════════════════════════════════════════════════════
+   PATCH NOTES LEFT PANEL
+   Mirrors .history-panel exactly but slides from the left
+   ══════════════════════════════════════════════════════ */
+.patch-panel {
+    box-sizing: border-box;
+    position: fixed;
+    left: -520px;
+    top: 0;
+    width: 20vw;
+    min-width: 360px;
+    max-width: 500px;
+    height: 100vh;
+    background: var(--panel-bg);
+    border-right: 2px solid var(--border);
+    transition: left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 200;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 20px;
+}
+.patch-panel.active {
+    left: 0;
+    box-shadow: 10px 0 30px var(--shadow);
+}
+
+/* ── Champion change entry ── */
+.patch-champ-entry {
+    margin-bottom: 32px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+}
+.patch-champ-entry:last-child { border-bottom: none; }
+
+.patch-champ-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+.patch-champ-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.patch-champ-name {
+    font-size: 1.35rem;
+    font-weight: 900;
+    color: var(--text-main);
+    line-height: 1;
+    text-shadow: var(--text-shadow);
+}
+
+/* BUFF / NERF / CHANGE badges */
+.patch-type-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 5px;
+}
+.patch-type-buff   { background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.4); }
+.patch-type-nerf   { background: rgba(231, 76, 60, 0.15);  color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.4); }
+.patch-type-change { background: rgba(160, 160, 168, 0.12); color: #a0a0a8; border: 1px solid rgba(160, 160, 168, 0.3); }
+
+/* ── Ability block ── */
+.patch-ability-block { margin-bottom: 14px; }
+
+.patch-ability-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.patch-ability-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.12);
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.3);
+}
+.patch-ability-name {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: var(--text-main);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Change bullet points ── */
+.patch-notes-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.patch-note-item {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    padding: 5px 8px 5px 12px;
+    border-left: 2px solid var(--border);
+    border-radius: 0 3px 3px 0;
+}
+.patch-note-item.is-positive {
+    color: #2ecc71;
+    border-left-color: rgba(46, 204, 113, 0.5);
+    background: rgba(46, 204, 113, 0.04);
+}
+.patch-note-item.is-negative {
+    color: #e74c3c;
+    border-left-color: rgba(231, 76, 60, 0.5);
+    background: rgba(231, 76, 60, 0.04);
+}
+
+/* ── "Not in patch notes" placeholder ── */
+.patch-no-changes {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 6px 0;
+    opacity: 0.6;
+}
