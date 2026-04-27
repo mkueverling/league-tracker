@@ -34,11 +34,6 @@ def get_twitch_token():
             print(f"Twitch Token Error: {e}")
     return twitch_access_token
 
-def extract_twitch_username(url):
-    if not url: return None
-    match = re.search(r'twitch\.tv/([^/?]+)', url.lower())
-    return match.group(1) if match else None
-
 def check_twitch_live(usernames):
     if not usernames: return set()
     token = get_twitch_token()
@@ -177,6 +172,48 @@ def get_streak_tag(cursor, puuid):
     except Exception: pass
     return None
 
+@app.get("/api/pro-live/{name}")
+def get_pro_live(name: str):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT a.puuid, a.riot_id 
+            FROM accounts a
+            JOIN players p ON a.player_id = p.player_id
+            WHERE LOWER(p.known_name) = %s OR LOWER(p.name) = %s
+            LIMIT 10
+        """, (name.lower(), name.lower()))
+        
+        accounts = cursor.fetchall()
+        if not accounts:
+            raise HTTPException(status_code=404, detail=f"Pro '{name}' not found in database.")
+            
+        for acc in accounts:
+            puuid = acc['puuid']
+            if not puuid: continue
+            
+            time.sleep(1.5)
+            
+            spec_url = f"https://{PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}"
+            res = requests.get(spec_url, headers=HEADERS, timeout=5)
+            
+            if res.status_code == 429:
+                raise HTTPException(status_code=429, detail="Riot API rate limit reached. Please try again in a moment.")
+                
+            if res.status_code == 200:
+                return {"riot_id": acc['riot_id']}
+        
+        raise HTTPException(status_code=404, detail=f"{name} is not currently in a live match on any known account.")
+    except HTTPException: raise
+    except Exception as e:
+        print(f"Pro Live Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if conn: conn.close()
+
 @app.get("/api/player/{name}/{tag}")
 def get_player(name: str, tag: str):
     conn = None
@@ -193,6 +230,20 @@ def get_player(name: str, tag: str):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         try:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS search_history (
+                    riot_id VARCHAR PRIMARY KEY,
+                    search_count INT DEFAULT 1,
+                    last_searched TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO search_history (riot_id, search_count, last_searched)
+                VALUES (%s, 1, NOW())
+                ON CONFLICT (riot_id) DO UPDATE 
+                SET search_count = search_history.search_count + 1, last_searched = NOW();
+            """, (f"{name}#{tag}",))
+            
             cursor.execute("""
                 INSERT INTO tracked_users (puuid, last_searched) 
                 VALUES (%s, NOW()) 
@@ -381,9 +432,9 @@ def get_player(name: str, tag: str):
                     if tag_disp in ["Winning", "On Fire", "Winners Queue"]: enemy_streaks += 1
                     
                 if "Twitch" in socials_dict:
-                    t_user = extract_twitch_username(socials_dict["Twitch"])
+                    t_user = socials_dict["Twitch"].strip().rstrip('/').split('/')[-1]
                     if t_user:
-                        twitch_check_map[t_user] = puuid
+                        twitch_check_map[t_user.lower()] = puuid
 
             p_payload = {
                 "puuid": puuid, "riotId": riot_id,
@@ -633,34 +684,101 @@ def search_players(q: str = ""):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         search_term = f"%{q.lower()}%"
         
-        cursor.execute("""
-            SELECT a.riot_id, p.known_name, p.name, p.profile_image_url
-            FROM accounts a
-            LEFT JOIN players p ON a.player_id = p.player_id
-            WHERE LOWER(a.riot_id) LIKE %s 
-               OR LOWER(p.known_name) LIKE %s 
-               OR LOWER(p.name) LIKE %s
-            LIMIT 5
-        """, (search_term, search_term, search_term))
-        
-        results = cursor.fetchall()
+        results = []
+        seen = set()
         base_url = "http://localhost:8000"
-        formatted = []
-        for r in results:
-            img = r.get('profile_image_url')
+        
+        # Determine if profile_icon_id exists in the DB so we can use Summoner Icons as fallback
+        cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='accounts' AND column_name='profile_icon_id'")
+        has_icon_col = bool(cursor.fetchone())
+        icon_select = ", a.profile_icon_id" if has_icon_col else ""
+        
+        # 1. Pro Players (Route to Live Checker)
+        cursor.execute(f"""
+            SELECT p.known_name, p.name, p.profile_image_url, p.team {icon_select}
+            FROM players p
+            LEFT JOIN accounts a ON p.player_id = a.player_id
+            WHERE LOWER(p.known_name) LIKE %s OR LOWER(p.name) LIKE %s
+            LIMIT 3
+        """, (search_term, search_term))
+        for p in cursor.fetchall():
+            pro_name = p.get('known_name') or p.get('name')
+            if not pro_name or pro_name.lower() in seen: continue
+            
+            img = p.get('profile_image_url')
             if img and str(img).strip().lower() != "none":
                 img = img.replace('\\', '/').strip()
                 if not img.startswith('/'): img = '/' + img
                 img = base_url + img
-            else:
+            elif has_icon_col and p.get('profile_icon_id'):
+                img = f"https://ddragon.leagueoflegends.com/cdn/{dd_patch}/img/profileicon/{p['profile_icon_id']}.png"
+            else: 
                 img = ""
-                
-            formatted.append({
-                "riot_id": r['riot_id'],
-                "name": r['known_name'] or r['name'] or "",
-                "image": img
+            
+            results.append({
+                "type": "PRO",
+                "riot_id": pro_name,
+                "name": "Find Live Match",
+                "image": img,
+                "is_pro": bool(p.get('team'))
             })
-        return formatted
+            seen.add(pro_name.lower())
+        
+        # 2. Dynamic Search History
+        try:
+            cursor.execute("""
+                SELECT riot_id, search_count
+                FROM search_history
+                WHERE LOWER(riot_id) LIKE %s
+                ORDER BY search_count DESC
+                LIMIT 5
+            """, (search_term,))
+            for h in cursor.fetchall():
+                r_id = h['riot_id']
+                if r_id.lower() in seen: continue
+                results.append({
+                    "type": "HISTORY",
+                    "riot_id": r_id,
+                    "name": f"Searched {h['search_count']} times",
+                    "image": ""
+                })
+                seen.add(r_id.lower())
+        except Exception:
+            pass 
+        
+        # 3. Standard Account Fallback
+        if len(results) < 5:
+            cursor.execute(f"""
+                SELECT a.riot_id, p.profile_image_url {icon_select}
+                FROM accounts a
+                LEFT JOIN players p ON a.player_id = p.player_id
+                WHERE LOWER(a.riot_id) LIKE %s
+                LIMIT 5
+            """, (search_term,))
+            for a in cursor.fetchall():
+                r_id = a['riot_id']
+                if not r_id or r_id.lower() in seen: continue
+                
+                img = a.get('profile_image_url')
+                if img and str(img).strip().lower() != "none":
+                    img = img.replace('\\', '/').strip()
+                    if not img.startswith('/'): img = '/' + img
+                    img = base_url + img
+                elif has_icon_col and a.get('profile_icon_id'):
+                    img = f"https://ddragon.leagueoflegends.com/cdn/{dd_patch}/img/profileicon/{a['profile_icon_id']}.png"
+                else: 
+                    img = ""
+                
+                results.append({
+                    "type": "ACCOUNT",
+                    "riot_id": r_id,
+                    "name": "", # Removed Database Account text
+                    "image": img
+                })
+                seen.add(r_id.lower())
+                if len(results) >= 7: break
+                
+        return results
     except Exception as e:
         print(f"Search Error: {e}")
         return []

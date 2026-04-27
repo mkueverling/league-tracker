@@ -13,9 +13,17 @@
 </head>
 <body>
 
+<script>
+    if (window.location.search.includes('search=')) {
+        document.body.classList.add('has-searched');
+    }
+</script>
+
 <header class="top-header">
     <div class="header-left">
-        <div class="logo"><span style="color: var(--gold);">PRO</span> TRACKER</div>
+        <div class="logo" style="cursor: pointer;" onclick="returnToHome()">
+            <span style="color: var(--gold);">PRO</span> TRACKER
+        </div>
         <div class="region-selector">
             <span class="active">EUW</span>
             <span class="disabled tooltip-box" data-tooltip="Not currently supported">NA</span>
@@ -27,6 +35,7 @@
         <div class="search-area top-search-area">
             <div class="search-container" id="search-container">
                 <input type="text" id="target" placeholder="TARGET#TAG" autocomplete="off">
+                <div class="search-dropdown" id="top-search-dropdown"></div>
                 <div id="search-icon" class="search-icon">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                 </div>
@@ -34,12 +43,18 @@
             </div>
         </div>
 
-        <button class="share-btn" onclick="openShop()" style="color: var(--text-main); border-color: var(--gold);">
+        <a href="https://discord.gg/yourlink" target="_blank" class="share-btn discord-btn">
+            <svg viewBox="0 0 127.14 96.36" width="18" height="18" fill="currentColor"><path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a67.55,67.55,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53C53.89,60,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.31,60,73.31,53s5-12.74,11.43-12.74S96.2,46,96.12,53C96.12,60,91.08,65.69,84.69,65.69Z"/></svg>
+            DISCORD
+        </a>
+
+        <button class="share-btn community-btn" onclick="openShop()">
             COMMUNITY HUB
         </button>
         
         <button class="share-btn" id="anim-toggle-btn" onclick="toggleAnimations()">
-            ANIMATIONS
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            VFX
         </button>
     </div>
 </header>
@@ -49,14 +64,16 @@
     <div class="landing-content">
         <div class="landing-interactive-area">
             <div class="landing-text-block">
-                <h1 class="landing-title">PRO TRACKER</h1>
-                <p class="landing-subtitle">CHECK IF YOU'RE PLAYING AGAINST A PRO.<br>SEE TRUE MASTERY SCORES ACROSS ALL KNOWN ALT ACCOUNTS.</p>
+                <h1 class="landing-title"><span style="color: var(--gold);">PRO</span> TRACKER</h1>
+                <p class="landing-subtitle">CHECK WHICH PRO YOU'RE UP AGAINST.<br>SEE THEIR TRUE MASTERY SCORES ACROSS ALL KNOWN ALT ACCOUNTS.</p>
             </div>
             <div class="search-container landing-search-container">
                 <input type="text" id="landing-target" placeholder="Enter Riot ID (e.g. Agurin#EUW)" autocomplete="off" spellcheck="false">
-                <div class="search-icon">
+                <div class="search-dropdown" id="landing-search-dropdown"></div>
+                <div class="search-icon" id="landing-search-icon">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                 </div>
+                <div id="landing-scan-loader" class="scan-loader landing-scan-loader"></div>
             </div>
         </div>
     </div>
@@ -145,6 +162,11 @@
 
 <div class="arena live-ui-element" id="arena">
     <div class="team-column" style="position: relative;">
+        <div id="announcement-banner" class="announcement-banner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span id="announcement-text" class="announcement-text">All Master+ players have been reset to Master 0 LP.</span>
+        </div>
+        
         <button class="patch-version-badge" id="patch-btn" onclick="togglePatchPanel()">
             <div class="patch-icon-wrapper">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
@@ -204,5 +226,16 @@
 </div>
 
 <script src="app.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const annText = document.getElementById('announcement-text');
+    const annBanner = document.getElementById('announcement-banner');
+    if (annText && annBanner && !annText.innerText.trim()) {
+        annBanner.style.display = 'none';
+    }
+});
+</script>
+
 </body>
 </html>

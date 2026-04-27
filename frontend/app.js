@@ -69,8 +69,24 @@ async function loadDictionaries() {
 }
 loadDictionaries();
 
-let currentHistoryOffset = 0;
-let currentHistoryPuuid = "";
+function toggleLoaders(show) {
+    const topIcon = document.getElementById('search-icon');
+    const topLoader = document.getElementById('scan-loader');
+    const landIcon = document.getElementById('landing-search-icon');
+    const landLoader = document.getElementById('landing-scan-loader');
+    
+    if (show) {
+        if(topIcon) topIcon.style.display = 'none';
+        if(topLoader) topLoader.style.display = 'block';
+        if(landIcon) landIcon.style.display = 'none';
+        if(landLoader) landLoader.style.display = 'block';
+    } else {
+        if(topIcon) topIcon.style.display = 'block';
+        if(topLoader) topLoader.style.display = 'none';
+        if(landIcon) landIcon.style.display = 'block';
+        if(landLoader) landLoader.style.display = 'none';
+    }
+}
 
 function toggleAnimations() {
     const body = document.body;
@@ -78,15 +94,15 @@ function toggleAnimations() {
     const btn = document.getElementById('anim-toggle-btn');
     if (body.classList.contains('disable-animations')) {
         btn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
-            ANIMATIONS
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+            VFX
         `;
         btn.style.color = "var(--red)";
         btn.style.borderColor = "var(--red)";
     } else {
         btn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-            ANIMATIONS
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            VFX
         `;
         btn.style.color = "";
         btn.style.borderColor = "";
@@ -240,7 +256,7 @@ function renderTeamSummary(teamArray, side, teamTags) {
                <div class="mastery-label" style="color: var(--text-muted); font-size: clamp(0.6rem, 0.75vw, 0.85rem);">AVG RANK</div>
                <div style="display: flex; align-items: center; gap: 8px;">
                    <img src="${rankPngUrl}" style="height: 32px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));" title="${avgRank.tier}">
-                   ${showLp ? `<span style="font-size: clamp(0.95rem, 1.2vw, 1.2rem); color: var(--text-main); white-space: nowrap; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--text-shadow);">${avgRank.lp} LP</span>` : ''}
+                   ${showLp ? `<span style="font-size: clamp(0.95rem, 1.2vw, 1.2rem); color: var(--text-main); white-space: nowrap; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--text-shadow);">${avgRank.lp} LP</span>` : `<span style="font-size: clamp(0.95rem, 1.2vw, 1.2rem); color: var(--text-main); white-space: nowrap; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--text-shadow);">${avgRank.tier.toUpperCase()}</span>`}
                </div>
            </div>`;
 
@@ -256,7 +272,7 @@ function renderTeamSummary(teamArray, side, teamTags) {
                 <div class="mastery-label" style="color: var(--text-muted); font-size: clamp(0.6rem, 0.75vw, 0.85rem);">TEAM MASTERY</div>
                 <div class="mastery-score" style="font-size: clamp(0.95rem, 1.2vw, 1.2rem); color: var(--text-main); white-space: nowrap; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--text-shadow);">${formatMastery(totalMastery)}</div>
             </div>
-            <div class="stats-group summary-box-mid" style="align-items: center;">
+            <div class="stats-group summary-box-mid" style="align-items: center; justify-content: center;">
                 ${statsHtml}
             </div>
             <div class="tags-group summary-box-right">${tagHtml}</div>
@@ -292,7 +308,7 @@ function render(p, index) {
     const isAlly = p.side === "ally";
     
     const roleBadgeHtml = isAlly ? `
-        <div class="tooltip-box" data-tooltip="${roleCleaned.toUpperCase()}" style="position: absolute; top: 50%; right: calc(-0.5 * clamp(4vw, 8vw, 10vw)); transform: translate(50%, -50%); z-index: 20;">
+        <div style="position: absolute; top: 50%; right: calc(-0.5 * clamp(4vw, 8vw, 10vw)); transform: translate(50%, -50%); z-index: 20; pointer-events: none;">
             <img src="http://localhost:8000/images/roles/${roleCleaned}.png" style="width: 2.5rem; height: 2.5rem; opacity: 0.9; filter: drop-shadow(0 0.15rem 0.3rem rgba(0,0,0,0.7));" onerror="this.style.opacity='0'">
         </div>
     ` : '';
@@ -312,6 +328,25 @@ function render(p, index) {
             <img src="${subStyleUrl}" style="width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 0.06rem solid rgba(255,255,255,0.15); box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.5); background: rgba(0,0,0,0.5);" onerror="this.style.opacity='0'">
         </div>
     `;
+
+    let familiarBadgeInner = '';
+    if (p.familiar_stats && (p.familiar_stats.wins_with > 0 || p.familiar_stats.losses_with > 0 || p.familiar_stats.wins_against > 0 || p.familiar_stats.losses_against > 0)) {
+        const f = p.familiar_stats;
+        const totalWith = parseInt(f.wins_with) + parseInt(f.losses_with);
+        const totalAgainst = parseInt(f.wins_against) + parseInt(f.losses_against);
+        
+        let textArr = [];
+        if (totalWith > 0) textArr.push(`<span style="color:var(--blue);">W/ ${totalWith} <span style="opacity:0.6; font-size:0.65rem;">(${Math.round((parseInt(f.wins_with) / totalWith) * 100)}%)</span></span>`);
+        if (totalAgainst > 0) textArr.push(`<span style="color:var(--red);">VS ${totalAgainst} <span style="opacity:0.6; font-size:0.65rem;">(${Math.round((parseInt(f.wins_against) / totalAgainst) * 100)}%)</span></span>`);
+        
+        const tip = "Based on matches stored in the database across all known accounts. W/ = Matches played on same team. VS = Matches against each other.";
+        familiarBadgeInner = `
+            <div class="familiar-badge tooltip-box" data-tooltip="${tip}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                ${textArr.join(' <span style="color:#404048; margin: 0 6px;">|</span> ')}
+            </div>
+        `;
+    }
 
     if (p.is_streamer && !isTarget) {
         return `
@@ -336,10 +371,12 @@ function render(p, index) {
     const mantraHtml = p.mantra ? `<div class="mantra-text" style="margin-top: 0.2rem; color: var(--text-muted); font-size: 0.85rem;">— "${p.mantra}"</div>` : '';
 
     let identityHtml = '';
+    const displayName = p.known_name || p.riotId.split('#')[0];
+    
     if (isDev) {
         identityHtml = `
             <div class="identity-group-dev">
-                <div class="dev-name-animated">${p.known_name || p.riotId.split('#')[0]}</div>
+                <div class="dev-name-animated truncate-text">${displayName}</div>
                 <div class="riot-id-subtext">${p.riotId}</div>
                 ${rankHtml}
                 ${mantraHtml}
@@ -348,7 +385,7 @@ function render(p, index) {
     } else if (isVip) {
         identityHtml = `
             <div class="identity-group-vip">
-                <div class="vip-name-animated">${p.known_name || p.riotId.split('#')[0]}</div>
+                <div class="vip-name-animated truncate-text">${displayName}</div>
                 <div class="riot-id-subtext">${p.riotId}</div>
                 ${rankHtml}
                 ${mantraHtml}
@@ -357,7 +394,7 @@ function render(p, index) {
     } else if (p.is_pro || p.team) { 
         identityHtml = `
             <div class="identity-group-pro">
-                <div class="pro-name-gold">${p.known_name || p.riotId.split('#')[0]}</div>
+                <div class="pro-name-gold truncate-text">${displayName}</div>
                 <div class="riot-id-subtext">${p.riotId}</div>
                 ${rankHtml}
                 ${mantraHtml}
@@ -366,7 +403,7 @@ function render(p, index) {
     } else {
         identityHtml = `
             <div class="riot-id-wrapper">
-                <span class="main-name truncate-text">${p.known_name || p.riotId.split('#')[0]}</span>
+                <span class="main-name truncate-text">${displayName}</span>
                 ${rankHtml}
                 ${mantraHtml}
             </div>
@@ -378,13 +415,19 @@ function render(p, index) {
         statsHtml = `<div class="stat-line" style="color: #7b7a8e; font-weight: 800; font-size: 0.9rem; text-transform: uppercase;">Unranked</div>`;
     } else {
         const rankPngUrl = `http://localhost:8000/images/ranks/${p.rank.toLowerCase()}.png`;
+        const isApex = ["master", "grandmaster", "challenger"].includes(p.rank.toLowerCase());
         
+        const rankText = isApex 
+            ? `<span class="stat-highlight">${p.lp || 0} LP</span>`
+            : `${p.rank.toUpperCase()} ${p.division} <span class="stat-highlight" style="margin-left: 4px;">${p.lp || 0} LP</span>`;
+
         statsHtml = `
             <div style="position: relative; display: flex; flex-direction: column; justify-content: center; height: 100%; width: 100%;">
                 <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.15; filter: grayscale(100%) brightness(0.1); transform: scale(2); background-image: url('${rankPngUrl}'); background-size: contain; background-position: center; background-repeat: no-repeat; pointer-events: none; z-index: 0;"></div>
                 <div style="position: relative; z-index: 1;">
-                    <div class="stat-line stat-highlight" style="margin-bottom: 0.25rem; font-size: 0.95rem;">
-                        ${p.rank.toUpperCase()} <span class="stat-highlight">${p.lp || 0} LP</span>
+                    <div class="stat-line stat-highlight" style="margin-bottom: 0.25rem; font-size: 0.95rem; display: flex; align-items: center;">
+                        <img src="${rankPngUrl}" style="width: 20px; height: 20px; margin-right: 6px; object-fit: contain; flex-shrink: 0;" alt="">
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${rankText}</span>
                     </div>
                     <div class="stat-line">WR: <span class="stat-highlight">N/A</span></div>
                     <div class="stat-line">KDA: <span class="stat-highlight">N/A</span></div>
@@ -397,20 +440,6 @@ function render(p, index) {
     
     let masteryScoreClass = 'mastery-score';
     let masteryLabelClass = 'mastery-label';
-    
-    if (computedTagList.includes('OBSESSED') || p.tag === 'OBSESSED') {
-        masteryScoreClass += ' obsessed-text';
-        masteryLabelClass += ' obsessed-text';
-    } else if (computedTagList.includes('CREATURE') || p.tag === 'CREATURE') {
-        masteryScoreClass += ' creature-text';
-        masteryLabelClass += ' creature-text';
-    } else if (computedTagList.includes('THREAT') || p.tag === 'THREAT') {
-        masteryScoreClass += ' threat-text';
-        masteryLabelClass += ' threat-text';
-    } else if (computedTagList.includes('SECRET WEAPON') || p.tag === 'SECRET WEAPON') {
-        masteryScoreClass += ' secret-weapon-text';
-        masteryLabelClass += ' secret-weapon-text';
-    }
 
     const hasHiddenMastery = (p.total_mastery || 0) > (p.current_mastery || 0);
     const masteryLabelStyle = hasHiddenMastery ? 'color: var(--gold); text-shadow: 0 0 8px rgba(241, 196, 15, 0.4);' : '';
@@ -423,54 +452,31 @@ function render(p, index) {
         return `<div class="${cls}">${tag}${tipHtml}</div>`;
     }).join('');
 
-    // --- TOP BANNER (Familiar Tab + Live Badge) ---
-    let familiarTabInner = '';
-    if (p.familiar_stats && (p.familiar_stats.wins_with > 0 || p.familiar_stats.losses_with > 0 || p.familiar_stats.wins_against > 0 || p.familiar_stats.losses_against > 0)) {
-        const f = p.familiar_stats;
-        const totalWith = parseInt(f.wins_with) + parseInt(f.losses_with);
-        const totalAgainst = parseInt(f.wins_against) + parseInt(f.losses_against);
-        
-        let textArr = [];
-        if (totalWith > 0) {
-            const wrWith = Math.round((parseInt(f.wins_with) / totalWith) * 100);
-            textArr.push(`<span style="color:var(--blue);">W/ ${totalWith} <span style="opacity:0.6; font-size:0.65rem;">(${wrWith}%)</span></span>`);
-        }
-        if (totalAgainst > 0) {
-            const wrAgainst = Math.round((parseInt(f.wins_against) / totalAgainst) * 100);
-            textArr.push(`<span style="color:var(--red);">VS ${totalAgainst} <span style="opacity:0.6; font-size:0.65rem;">(${wrAgainst}%)</span></span>`);
-        }
-        
-        const tip = "Based on matches stored in the database across all known accounts. W/ = Matches played on same team. VS = Matches against each other.";
-        familiarTabInner = `
-            <div class="familiar-tab tooltip-box" data-tooltip="${tip}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="margin-right: 6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                ${textArr.join(' <span style="color:#404048; margin: 0 6px;">|</span> ')}
+    let liveBadgeInner = '';
+    if (p.is_live && p.socials && p.socials.Twitch) {
+        const twitchUrl = p.socials.Twitch.startsWith('http') ? p.socials.Twitch : `https://twitch.tv/${p.socials.Twitch}`;
+        liveBadgeInner = `
+            <div class="top-banner-container">
+                <a href="${twitchUrl}" target="_blank" class="live-badge tooltip-box" data-tooltip="Watch Live on Twitch" onclick="event.stopPropagation();">
+                    <div class="live-dot"></div> LIVE
+                </a>
             </div>
         `;
     }
 
-    let liveBadgeInner = '';
-    if (p.is_live && p.socials && p.socials.Twitch) {
-        liveBadgeInner = `
-            <a href="${p.socials.Twitch}" target="_blank" class="live-badge tooltip-box" data-tooltip="Watch Live on Twitch" onclick="event.stopPropagation();">
-                <div class="live-dot"></div> LIVE
-            </a>
-        `;
-    }
-
-    let topBannerHtml = '';
-    if (familiarTabInner || liveBadgeInner) {
-        topBannerHtml = `
-            <div class="top-banner-container">
-                ${liveBadgeInner}
-                ${familiarTabInner}
+    let familiarBadgeContainer = '';
+    if (familiarBadgeInner) {
+        familiarBadgeContainer = `
+            <div class="familiar-banner-container">
+                ${familiarBadgeInner}
             </div>
         `;
     }
 
     return `
         <div class="card ${p.side}-card ${cardEffectClass}" style="position: relative; --card-delay: ${animDelay}s;" ${clickAction}>
-            ${topBannerHtml}
+            ${liveBadgeInner}
+            ${familiarBadgeContainer}
             ${roleBadgeHtml}
             <div class="card-bg-wrapper"><div class="champ-splash" style="background-image: url('${splashImg}')"></div></div>
             <div class="row-content">
@@ -486,12 +492,90 @@ function render(p, index) {
         </div>`;
 }
 
-async function executeScan() {
-    const rawQuery = document.getElementById('target').value.trim();
+let searchTimeout = null;
+async function handleSearchInput(e, dropdownId) {
+    const query = e.target.value.trim();
+    const dropdown = document.getElementById(dropdownId);
     
-    if(!rawQuery.includes('#')) {
-        alert("Please include a Region Tag! (Example: Agurin#EUW)");
+    if (query.length < 2) {
+        dropdown.classList.remove('active');
         return;
+    }
+
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+        try {
+            const res = await fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            if (data.length === 0) {
+                dropdown.classList.remove('active');
+                return;
+            }
+
+            dropdown.innerHTML = data.map(item => {
+                return `
+                <div class="search-dropdown-item" onclick="selectSearchResult('${item.riot_id}', '${e.target.id}', '${dropdownId}')">
+                    ${item.image ? `<img src="${item.image}" class="search-dropdown-img">` : `<div class="search-dropdown-img" style="display:flex;align-items:center;justify-content:center;font-size:14px;">👤</div>`}
+                    <div class="search-dropdown-info">
+                        <div class="search-dropdown-name">${item.riot_id}</div>
+                        ${item.name ? `<div class="search-dropdown-riotid">${item.name}</div>` : ''}
+                    </div>
+                </div>
+                `;
+            }).join('');
+            
+            dropdown.classList.add('active');
+        } catch(err) {
+            console.error(err);
+        }
+    }, 300);
+}
+
+function selectSearchResult(riotId, inputId, dropdownId) {
+    const input = document.getElementById(inputId);
+    input.value = riotId;
+    document.getElementById(dropdownId).classList.remove('active');
+    
+    if (inputId === 'landing-target') {
+        document.getElementById('target').value = riotId;
+    } else {
+        const landingInput = document.getElementById('landing-target');
+        if (landingInput) landingInput.value = riotId;
+    }
+    executeScan();
+}
+
+async function executeScan(isPopState = false) {
+    let rawQuery = document.getElementById('target').value.trim();
+
+    toggleLoaders(true);
+
+    if (!rawQuery.includes('#')) {
+        try {
+            const resolveRes = await fetch(`http://localhost:8000/api/pro-live/${encodeURIComponent(rawQuery)}`);
+            const resolveData = await resolveRes.json();
+            
+            if (resolveRes.ok && resolveData.riot_id) {
+                rawQuery = resolveData.riot_id;
+                document.getElementById('target').value = rawQuery; 
+                if (document.getElementById('landing-target')) {
+                    document.getElementById('landing-target').value = rawQuery;
+                }
+            } else {
+                alert(resolveData.detail || "Player not found! Please include a Region Tag (e.g., Agurin#EUW)");
+                toggleLoaders(false);
+                return;
+            }
+        } catch(e) {
+            alert("Please include a Region Tag! (Example: Agurin#EUW)");
+            toggleLoaders(false);
+            return;
+        }
+    }
+
+    if (isPopState !== true) {
+        history.pushState({ page: 'live', query: rawQuery }, '', `?search=${encodeURIComponent(rawQuery)}`);
     }
 
     document.body.classList.add('has-searched');
@@ -499,22 +583,26 @@ async function executeScan() {
     const shopPage = document.getElementById('shop-page');
     if (shopPage) shopPage.style.display = 'none';
     
-    document.querySelectorAll('.live-ui-element').forEach(el => {
-        el.style.display = '';
-    });
+    document.querySelectorAll('.live-ui-element').forEach(el => el.style.display = 'none');
+    
+    document.getElementById('top-search-dropdown')?.classList.remove('active');
+    document.getElementById('landing-search-dropdown')?.classList.remove('active');
     
     const [name, tag] = rawQuery.split('#').map(s => s.trim());
-    searchIcon.style.display = 'none'; scanLoader.style.display = 'block';
     
-    // Clear old data
     lTeam.innerHTML = ''; rTeam.innerHTML = ''; document.getElementById('intel-banner').style.display = 'none';
 
-    // RESET PATCH BUTTON ANIMATION FOR NEW SEARCHES
     const patchBtn = document.getElementById('patch-btn');
     if (patchBtn) {
-        patchBtn.style.animation = 'none';
+        patchBtn.classList.remove('animate-in');
+        patchBtn.classList.remove('glow-animation');
         void patchBtn.offsetWidth; 
-        patchBtn.style.animation = null; 
+    }
+    
+    const annBanner = document.getElementById('announcement-banner');
+    if (annBanner) {
+        annBanner.classList.remove('animate-in');
+        void annBanner.offsetWidth; 
     }
 
     try {
@@ -621,11 +709,36 @@ async function executeScan() {
                 .filter(Boolean)
         )];
         
-    }catch (e) {
+        document.querySelectorAll('.live-ui-element').forEach(el => el.style.display = '');
+
+        if (patchBtn) patchBtn.classList.add('animate-in');
+        
+        if (annBanner) {
+            const annText = document.getElementById('announcement-text');
+            if (annText && annText.innerText.trim().length > 0) {
+                annBanner.classList.add('animate-in');
+            }
+        }
+
+        setTimeout(async () => {
+            try {
+                const results = await Promise.all(
+                    currentLobbyChampKeys.map(k => fetch(`http://localhost:8000/api/patch/${k}`).then(r => r.json()))
+                );
+                const hasChanges = results.some(r => r.abilities && r.abilities.length > 0);
+                if (hasChanges && patchBtn) {
+                    patchBtn.classList.add('glow-animation');
+                }
+            } catch(e) {}
+        }, 500);
+        
+    } catch (e) {
+        document.querySelectorAll('.live-ui-element').forEach(el => el.style.display = '');
         document.getElementById('intel-text').innerHTML = `<span class='intel-accent' style='color:var(--red);'>ERROR:</span> ${e.message}`;
         document.getElementById('intel-banner').style.display = 'flex';
     }
-    scanLoader.style.display = 'none'; searchIcon.style.display = 'block';
+    
+    toggleLoaders(false);
 }
 
 async function openHistory(p) {
@@ -986,14 +1099,62 @@ function closeShop() {
     }
 }
 
-const landingTarget = document.getElementById('landing-target');
-if (landingTarget) {
-    landingTarget.addEventListener('keypress', e => { 
+function returnToHome(isPopState = false) {
+    if (isPopState !== true) {
+        history.pushState({ page: 'home' }, '', window.location.pathname);
+    }
+    if (liveTimerInterval) clearInterval(liveTimerInterval);
+    document.body.classList.remove('has-searched');
+    const shopPage = document.getElementById('shop-page');
+    if (shopPage) shopPage.style.display = 'none';
+    if (hPanel && hPanel.classList.contains('active')) hPanel.classList.remove('active');
+    if (patchPanel && patchPanel.classList.contains('active')) closePatchPanel();
+    const rosterPanel = document.getElementById('team-roster-panel');
+    if (rosterPanel && rosterPanel.classList.contains('active')) closeTeamRoster();
+    document.querySelectorAll('.live-ui-element').forEach(el => el.style.display = 'none');
+    const landing = document.getElementById('landing-page');
+    if (landing) landing.style.display = 'block';
+    document.getElementById('target').value = '';
+    const landingInput = document.getElementById('landing-target');
+    if (landingInput) landingInput.value = '';
+}
+
+const topInput = document.getElementById('target');
+const landingInput = document.getElementById('landing-target');
+
+if (topInput) {
+    topInput.addEventListener('keydown', e => { 
         if (e.key === 'Enter') {
-            document.getElementById('target').value = e.target.value;
-            executeScan();
+            e.preventDefault();
+            const dropdown = document.getElementById('top-search-dropdown');
+            const firstItem = dropdown && dropdown.classList.contains('active') ? dropdown.querySelector('.search-dropdown-item') : null;
+            if (firstItem) {
+                firstItem.click();
+            } else {
+                executeScan();
+            }
         } 
     });
+    topInput.addEventListener('input', (e) => handleSearchInput(e, 'top-search-dropdown'));
+    topInput.addEventListener('focus', (e) => { if(e.target.value.length >= 2) handleSearchInput(e, 'top-search-dropdown'); });
+}
+
+if (landingInput) {
+    landingInput.addEventListener('keydown', e => { 
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const dropdown = document.getElementById('landing-search-dropdown');
+            const firstItem = dropdown && dropdown.classList.contains('active') ? dropdown.querySelector('.search-dropdown-item') : null;
+            if (firstItem) {
+                firstItem.click();
+            } else {
+                document.getElementById('target').value = e.target.value;
+                executeScan();
+            }
+        } 
+    });
+    landingInput.addEventListener('input', (e) => handleSearchInput(e, 'landing-search-dropdown'));
+    landingInput.addEventListener('focus', (e) => { if(e.target.value.length >= 2) handleSearchInput(e, 'landing-search-dropdown'); });
 }
 
 document.addEventListener('click', (e) => { 
@@ -1002,10 +1163,37 @@ document.addEventListener('click', (e) => {
     
     const rosterPanel = document.getElementById('team-roster-panel');
     if (rosterPanel && rosterPanel.classList.contains('active') && !rosterPanel.contains(e.target) && !e.target.closest('.clickable-team')) closeTeamRoster();
+
+    if (!e.target.closest('.search-container')) {
+        document.getElementById('top-search-dropdown')?.classList.remove('active');
+        document.getElementById('landing-search-dropdown')?.classList.remove('active');
+    }
 });
 
-document.getElementById('target').addEventListener('keypress', e => { if (e.key === 'Enter') executeScan(); });
 document.getElementById('close-panel-btn').addEventListener('click', () => { 
     if (hPanel) hPanel.classList.remove('active'); 
     closeTeamRoster(); 
+});
+
+window.addEventListener('popstate', (e) => {
+    if (e.state && e.state.page === 'live' && e.state.query) {
+        document.getElementById('target').value = e.state.query;
+        document.querySelectorAll('.live-ui-element').forEach(el => el.style.display = 'none');
+        executeScan(true);
+    } else {
+        returnToHome(true);
+    }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const searchParam = urlParams.get('search');
+    if (searchParam) {
+        document.getElementById('target').value = searchParam;
+        document.body.classList.add('has-searched');
+        document.querySelectorAll('.live-ui-element').forEach(el => el.style.display = 'none');
+        executeScan(true);
+    } else {
+        history.replaceState({ page: 'home' }, '', window.location.pathname);
+    }
 });
